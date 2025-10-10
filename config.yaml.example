@@ -1,0 +1,79 @@
+# Scrapegoat Configuration File
+# Copy this file to config.yaml and fill in your credentials
+
+screenscraper:
+  # Your ScreenScraper developer credentials
+  dev_id: "YOUR_DEV_ID"
+  dev_password: "YOUR_DEV_PASSWORD"
+
+  # Your ScreenScraper user credentials
+  user_id: "YOUR_USERNAME"
+  user_password: "YOUR_PASSWORD"
+
+  # Software name (identifies your scraper to the API)
+  software_name: "scrapegoat/1.0"
+
+# Platform/System definitions
+# System IDs can be found at: https://www.screenscraper.fr/systemelist.php
+platforms:
+  nes:
+    id: 3
+    name: "Nintendo Entertainment System"
+    extensions:
+      - ".nes"
+      - ".zip"
+
+  snes:
+    id: 4
+    name: "Super Nintendo"
+    extensions:
+      - ".sfc"
+      - ".smc"
+      - ".zip"
+
+  genesis:
+    id: 1
+    name: "Sega Genesis"
+    extensions:
+      - ".md"
+      - ".bin"
+      - ".gen"
+      - ".zip"
+
+  n64:
+    id: 14
+    name: "Nintendo 64"
+    extensions:
+      - ".n64"
+      - ".z64"
+      - ".v64"
+      - ".zip"
+
+  ps1:
+    id: 10
+    name: "Sony PlayStation"
+    extensions:
+      - ".bin"
+      - ".cue"
+      - ".iso"
+      - ".img"
+      - ".pbp"
+
+  gba:
+    id: 12
+    name: "Game Boy Advance"
+    extensions:
+      - ".gba"
+      - ".zip"
+
+  arcade:
+    id: 75
+    name: "Arcade"
+    extensions:
+      - ".zip"
+
+# Output settings
+output:
+  gamelist_file: "gamelist.xml"
+  media_dir: "media"
+  # cache_dir: "~/.scrapegoat"  # Default: ~/.scrapegoat - persistent cache for downloaded media
