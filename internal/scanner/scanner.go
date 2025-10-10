@@ -31,6 +31,9 @@ func NewScanner(extensions []string) *Scanner {
 		extMap[normalized] = true
 	}
 
+	// Always include .zip files regardless of platform extensions
+	extMap[".zip"] = true
+
 	return &Scanner{
 		extensions: extMap,
 	}
@@ -62,8 +65,9 @@ func (s *Scanner) Scan(directory string) ([]ROMFile, error) {
 		}
 
 		// Check if file has a supported extension
+		// If no extensions are specified, include all files
 		ext := strings.ToLower(filepath.Ext(path))
-		if s.extensions[ext] {
+		if len(s.extensions) == 0 || s.extensions[ext] {
 			roms = append(roms, ROMFile{
 				Path:     path,
 				Filename: filepath.Base(path),
@@ -82,7 +86,11 @@ func (s *Scanner) Scan(directory string) ([]ROMFile, error) {
 }
 
 // IsSupported checks if a file extension is supported
+// Returns true for all files if no extensions are specified
 func (s *Scanner) IsSupported(filename string) bool {
+	if len(s.extensions) == 0 {
+		return true
+	}
 	ext := strings.ToLower(filepath.Ext(filename))
 	return s.extensions[ext]
 }

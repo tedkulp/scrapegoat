@@ -43,25 +43,22 @@ func (g *Generator) SetPreferredLanguages(languages []string) {
 
 // AddGameFromScraper converts ScreenScraper game data to gamelist.xml entry
 func (g *Generator) AddGameFromScraper(romPath string, game *scraper.Game, mediaFiles map[string]string) error {
-	// Calculate relative ROM path
-	relRomPath, err := filepath.Rel(g.romDir, romPath)
-	if err != nil {
-		return fmt.Errorf("failed to get relative ROM path: %w", err)
-	}
+	// ROM path should be relative to gamelist.xml location (which is in romDir)
+	// EmulationStation expects paths like "./GameName.zip"
+	romFilename := filepath.Base(romPath)
+	relRomPath := "./" + romFilename
 
-	// Start with "./" for EmulationStation
-	if !strings.HasPrefix(relRomPath, ".") {
-		relRomPath = "./" + relRomPath
-	}
+	// Get only the first genre and trim whitespace
+	genreStr := strings.TrimSpace(game.GetFirstGenre())
 
 	gameEntry := Game{
 		Path:        relRomPath,
-		Name:        game.GetPreferredName(g.preferredRegions),
-		Desc:        game.GetPreferredSynopsis(g.preferredLanguages),
-		Developer:   game.Developer.Name,
-		Publisher:   game.Publisher.Name,
-		Genre:       game.GetGenreNames(),
-		Players:     game.Players.Text,
+		Name:        strings.TrimSpace(game.GetPreferredName(g.preferredRegions)),
+		Desc:        strings.TrimSpace(game.GetPreferredSynopsis(g.preferredLanguages)),
+		Developer:   strings.TrimSpace(game.Developer.Name),
+		Publisher:   strings.TrimSpace(game.Publisher.Name),
+		Genre:       genreStr,
+		Players:     strings.TrimSpace(game.Players.Text),
 		ReleaseDate: formatReleaseDate(game.GetReleaseDate(g.preferredRegions)),
 	}
 
@@ -72,37 +69,10 @@ func (g *Generator) AddGameFromScraper(romPath string, game *scraper.Game, media
 		}
 	}
 
-	// Add media file paths (relative to ROM directory)
-	for mediaType, localPath := range mediaFiles {
-		relMediaPath, err := filepath.Rel(g.romDir, localPath)
-		if err != nil {
-			continue
-		}
-
-		// Add "./" prefix for EmulationStation
-		if !strings.HasPrefix(relMediaPath, ".") {
-			relMediaPath = "./" + relMediaPath
-		}
-
-		switch mediaType {
-		case "box-2D", "box-texture", "screenmarquee":
-			if gameEntry.Image == "" {
-				gameEntry.Image = relMediaPath
-			}
-		case "screenshot-title":
-			if gameEntry.Thumbnail == "" {
-				gameEntry.Thumbnail = relMediaPath
-			}
-		case "video", "video-normalized":
-			if gameEntry.Video == "" {
-				gameEntry.Video = relMediaPath
-			}
-		case "wheel", "wheel-hd", "wheel-steel", "wheel-carbon":
-			if gameEntry.Marquee == "" {
-				gameEntry.Marquee = relMediaPath
-			}
-		}
-	}
+	// Note: Media tags are not included in gamelist.xml
+	// EmulationStation automatically looks for media files by convention:
+	// - Images in subdirectories like wheel/, screenshots/, etc.
+	// - Files should match the ROM name (without extension)
 
 	g.gameList.AddGame(gameEntry)
 	return nil
@@ -146,19 +116,47 @@ func (g *Generator) WriteToFile(filepath string) error {
 	return nil
 }
 
-// formatReleaseDate converts various date formats to YYYYMMDD format
+// formatReleaseDate converts various date formats to YYYYMMDDTHHMISS format
 func formatReleaseDate(date string) string {
-	// ScreenScraper returns dates in YYYY-MM-DD format
-	// EmulationStation uses YYYYMMDDTHHMISS format, but YYYYMMDD is acceptable
-	date = strings.ReplaceAll(date, "-", "")
-	date = strings.ReplaceAll(date, "/", "")
-
-	// Ensure we have at least YYYYMMDD (8 characters)
-	if len(date) >= 8 {
-		return date[:8] + "T000000"
+	if date == "" {
+		return ""
 	}
 
-	return date
+	// ScreenScraper returns dates in YYYY-MM-DD format
+	// EmulationStation uses YYYYMMDDTHHMISS format
+	date = strings.ReplaceAll(date, "-", "")
+	date = strings.ReplaceAll(date, "/", "")
+	date = strings.TrimSpace(date)
+
+	// Pad the date to ensure it's YYYYMMDD format
+	// If we have partial dates like "1990" -> "19900101"
+	// If we have "199001" -> "19900101"
+	// If we have "19900215" -> "19900215"
+	switch len(date) {
+	case 0:
+		return ""
+	case 4: // YYYY
+		date = date + "0101" // January 1st
+	case 6: // YYYYMM
+		date = date + "01" // First day of month
+	case 8: // YYYYMMDD (already complete)
+		// Keep as-is
+	default:
+		// If longer than 8, truncate to 8
+		if len(date) > 8 {
+			date = date[:8]
+		} else if len(date) < 4 {
+			// Too short to be valid, return empty
+			return ""
+		}
+	}
+
+	// Ensure we have exactly 8 characters before adding time
+	if len(date) == 8 {
+		return date + "T000000"
+	}
+
+	return ""
 }
 
 // parseRating converts rating string to float64 (0-1 scale)

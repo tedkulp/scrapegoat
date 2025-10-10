@@ -12,14 +12,17 @@ Scrapegoat is a ROM scraper for EmulationStation that uses the ScreenScraper.fr 
 # Build the binary
 go build -o scrapegoat cmd/scraper/main.go
 
-# Run with basic options
-./scrapegoat --platform nes --rom-dir /path/to/roms
+# List available platforms
+./scrapegoat list-platforms
+
+# Scrape ROMs with basic options
+./scrapegoat scrape --platform nes --rom-dir /path/to/roms
 
 # Dry run (test without downloading)
-./scrapegoat --platform nes --rom-dir /path/to/roms --dry-run
+./scrapegoat scrape --platform nes --rom-dir /path/to/roms --dry-run
 
 # With verbose output
-./scrapegoat --platform nes --rom-dir /path/to/roms --verbose
+./scrapegoat scrape --platform nes --rom-dir /path/to/roms --verbose
 ```
 
 ## Configuration
@@ -28,7 +31,7 @@ The application uses `config.yaml` for configuration. Copy `config.yaml.example`
 - `screenscraper.dev_id` and `screenscraper.dev_password` - Developer credentials
 - `screenscraper.user_id` and `screenscraper.user_password` - User credentials
 
-Platform definitions in `config.yaml` map platform names to ScreenScraper system IDs and file extensions. System IDs are found at https://www.screenscraper.fr/systemelist.php.
+**Platform Auto-Discovery**: Platforms are automatically fetched from the ScreenScraper.fr API and cached locally in `~/.scrapegoat/platforms.json`. The cache is refreshed every 12 hours. You can optionally define platforms manually in `config.yaml` to override API data or work offline.
 
 ## Architecture
 
@@ -63,6 +66,8 @@ The main scraping workflow follows these steps:
 **API Retry Logic** (`internal/scraper/client.go:67-98`): The ScreenScraper client retries failed requests up to 3 times with exponential backoff (2s, 4s, 8s). Rate limit responses (429) trigger a 10-second delay before retry.
 
 **Relative Path Generation** (`internal/metadata/gamelist.go:45-109`): Media file paths in gamelist.xml are stored relative to the ROM directory with "./" prefix, as required by EmulationStation.
+
+**Platform Caching** (`pkg/config/config.go:137-245`): Platform definitions are fetched from the ScreenScraper API via `systemesListe.php` and cached locally. The cache expires after 12 hours. When a platform is requested, the system first checks `config.yaml`, then the cache, and finally fetches from the API if needed. This allows the application to work with any platform supported by ScreenScraper without manual configuration.
 
 ## Dependencies
 

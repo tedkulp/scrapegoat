@@ -31,6 +31,7 @@ type Downloader struct {
 	cacheDir    string
 	platform    string
 	workerCount int
+	debug       bool
 }
 
 // NewDownloader creates a new media downloader
@@ -52,7 +53,13 @@ func NewDownloader(cacheDir, platform string, workerCount int) (*Downloader, err
 		cacheDir:    platformCacheDir,
 		platform:    platform,
 		workerCount: workerCount,
+		debug:       false,
 	}, nil
+}
+
+// SetDebug enables debug logging
+func (d *Downloader) SetDebug(debug bool) {
+	d.debug = debug
 }
 
 // Download downloads media files concurrently
@@ -120,11 +127,27 @@ func (d *Downloader) downloadFile(mediaFile MediaFile) (string, bool, error) {
 	// Check if file already exists in cache
 	if _, err := os.Stat(localPath); err == nil {
 		// File exists in cache, return it
+		if d.debug {
+			fmt.Fprintf(os.Stderr, "[DEBUG] MEDIA: %s/%s - CACHED (no API call)\n", mediaFile.Type, mediaFile.Filename)
+		}
 		return localPath, true, nil
+	}
+
+	if d.debug {
+		fmt.Fprintf(os.Stderr, "[DEBUG] MEDIA: %s/%s - DOWNLOADING (API call)\n", mediaFile.Type, mediaFile.Filename)
+		fmt.Fprintf(os.Stderr, "[DEBUG]   URL: %s\n", mediaFile.URL)
 	}
 
 	// File not in cache, download it
 	resp, err := d.httpClient.Get(mediaFile.URL)
+
+	if d.debug && resp != nil {
+		// Check if there were redirects
+		if resp.Request.URL.String() != mediaFile.URL {
+			fmt.Fprintf(os.Stderr, "[DEBUG]   REDIRECT detected: %s -> %s\n", mediaFile.URL, resp.Request.URL.String())
+			fmt.Fprintf(os.Stderr, "[DEBUG]   ⚠️  Redirect might count as additional API call!\n")
+		}
+	}
 	if err != nil {
 		return "", false, fmt.Errorf("failed to download %s: %w", mediaFile.URL, err)
 	}

@@ -9,15 +9,13 @@ type GameList struct {
 }
 
 // Game represents a single game entry in gamelist.xml
+// Note: Media tags (image, video, marquee, thumbnail) are not included
+// as EmulationStation finds media files by convention based on ROM filename
 type Game struct {
 	Path        string  `xml:"path"`
 	Name        string  `xml:"name,omitempty"`
 	SortName    string  `xml:"sortname,omitempty"`
 	Desc        string  `xml:"desc,omitempty"`
-	Image       string  `xml:"image,omitempty"`
-	Video       string  `xml:"video,omitempty"`
-	Marquee     string  `xml:"marquee,omitempty"`
-	Thumbnail   string  `xml:"thumbnail,omitempty"`
 	Rating      float64 `xml:"rating,omitempty"`
 	ReleaseDate string  `xml:"releasedate,omitempty"`
 	Developer   string  `xml:"developer,omitempty"`

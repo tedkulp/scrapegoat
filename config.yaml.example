@@ -13,64 +13,20 @@ screenscraper:
   # Software name (identifies your scraper to the API)
   software_name: "scrapegoat/1.0"
 
-# Platform/System definitions
+# Platform/System definitions (OPTIONAL)
+# Platforms are now automatically fetched from ScreenScraper.fr API and cached locally.
+# The cache is stored in ~/.scrapegoat/platforms.json and refreshed every 12 hours.
+# You can still define platforms here if you want to override the API data or work offline.
+#
 # System IDs can be found at: https://www.screenscraper.fr/systemelist.php
-platforms:
-  nes:
-    id: 3
-    name: "Nintendo Entertainment System"
-    extensions:
-      - ".nes"
-      - ".zip"
-
-  snes:
-    id: 4
-    name: "Super Nintendo"
-    extensions:
-      - ".sfc"
-      - ".smc"
-      - ".zip"
-
-  genesis:
-    id: 1
-    name: "Sega Genesis"
-    extensions:
-      - ".md"
-      - ".bin"
-      - ".gen"
-      - ".zip"
-
-  n64:
-    id: 14
-    name: "Nintendo 64"
-    extensions:
-      - ".n64"
-      - ".z64"
-      - ".v64"
-      - ".zip"
-
-  ps1:
-    id: 10
-    name: "Sony PlayStation"
-    extensions:
-      - ".bin"
-      - ".cue"
-      - ".iso"
-      - ".img"
-      - ".pbp"
-
-  gba:
-    id: 12
-    name: "Game Boy Advance"
-    extensions:
-      - ".gba"
-      - ".zip"
-
-  arcade:
-    id: 75
-    name: "Arcade"
-    extensions:
-      - ".zip"
+#
+# platforms:
+#   nes:
+#     id: 3
+#     name: "Nintendo Entertainment System"
+#     extensions:
+#       - ".nes"
+#       - ".zip"
 
 # Output settings
 output:

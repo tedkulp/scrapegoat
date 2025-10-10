@@ -11,7 +11,10 @@
       "Bash(./scrapegoat:*)",
       "Bash(time:*)",
       "Bash(cat:*)",
-      "Bash(make:*)"
+      "Bash(make:*)",
+      "Bash(go run:*)",
+      "WebFetch(domain:www.screenscraper.fr)",
+      "Read(//home/ted/**)"
     ],
     "deny": [],
     "ask": []
