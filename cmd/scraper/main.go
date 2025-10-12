@@ -423,40 +423,6 @@ func runScraper(cmd *cobra.Command, args []string) {
 		logInfo("Media files location: %s", mediaRootDir)
 	}
 
-	// Summary
-	logInfo("\n=== Summary ===")
-	logInfo("Total ROMs processed: %d", len(roms))
-	logInfo("Successful: %d", successCount)
-	logInfo("Failed: %d", errorCount)
-
-	// API call statistics
-	if userInfo != nil && !dryRun {
-		var finalRequests int
-		fmt.Sscanf(userInfo.RequestsToday, "%d", &finalRequests)
-		totalAPICalls := finalRequests - initialRequests
-
-		logInfo("\n=== API Call Statistics ===")
-		logInfo("Total API calls: %d", totalAPICalls)
-		if successCount > 0 {
-			avgPerROM := float64(totalAPICalls) / float64(successCount)
-			logInfo("Average API calls per ROM: %.2f", avgPerROM)
-		}
-		logInfo("(Run with --verbose to see detailed API call logs)")
-	}
-
-	if dryRun {
-		logInfo("\nDRY RUN completed - no files were written")
-	} else {
-		logInfo("\nScraping complete!")
-	}
-
-	// Show cache info if verbose
-	if verbose {
-		logInfo("\n=== Cache Info ===")
-		logInfo("Cache directory: %s/games", cacheDir)
-		logInfo("Game data is cached for 12 hours")
-	}
-
 	// Handle failed ROMs - offer to delete them
 	if len(failedROMs) > 0 && !dryRun {
 		logInfo("\n=== Failed ROMs ===")
@@ -490,6 +456,40 @@ func runScraper(cmd *cobra.Command, args []string) {
 		} else {
 			logInfo("\nSkipping deletion. Failed ROM files were kept.")
 		}
+	}
+
+	// Summary
+	logInfo("\n=== Summary ===")
+	logInfo("Total ROMs processed: %d", len(roms))
+	logInfo("Successful: %d", successCount)
+	logInfo("Failed: %d", errorCount)
+
+	// API call statistics
+	if userInfo != nil && !dryRun {
+		var finalRequests int
+		fmt.Sscanf(userInfo.RequestsToday, "%d", &finalRequests)
+		totalAPICalls := finalRequests - initialRequests
+
+		logInfo("\n=== API Call Statistics ===")
+		logInfo("Total API calls: %d", totalAPICalls)
+		if successCount > 0 {
+			avgPerROM := float64(totalAPICalls) / float64(successCount)
+			logInfo("Average API calls per ROM: %.2f", avgPerROM)
+		}
+		logInfo("(Run with --verbose to see detailed API call logs)")
+	}
+
+	if dryRun {
+		logInfo("\nDRY RUN completed - no files were written")
+	} else {
+		logInfo("\nScraping complete!")
+	}
+
+	// Show cache info if verbose
+	if verbose {
+		logInfo("\n=== Cache Info ===")
+		logInfo("Cache directory: %s/games", cacheDir)
+		logInfo("Game data is cached for 12 hours")
 	}
 }
 
