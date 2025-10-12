@@ -194,7 +194,8 @@ func (c *Config) loadPlatformsFromAPI() error {
 
 		// Create proper URL-safe slugs from the name
 		// This handles special characters like ², é, etc.
-		fullSlug := slug.Make(name)
+		// Remove dashes to make slugs more compact (e.g., "n64dd" instead of "n64-dd")
+		fullSlug := strings.ReplaceAll(slug.Make(name), "-", "")
 
 		// Store under full slug
 		platforms[fullSlug] = platform
@@ -206,7 +207,7 @@ func (c *Config) loadPlatformsFromAPI() error {
 			for _, namePart := range nameParts {
 				namePart = strings.TrimSpace(namePart)
 				if namePart != "" {
-					partSlug := slug.Make(namePart)
+					partSlug := strings.ReplaceAll(slug.Make(namePart), "-", "")
 					// Only store if not already taken by another platform
 					if _, exists := platforms[partSlug]; !exists {
 						platforms[partSlug] = platform
@@ -215,6 +216,9 @@ func (c *Config) loadPlatformsFromAPI() error {
 			}
 		}
 	}
+
+	// Apply platform aliases (allows custom slug names)
+	applyPlatformAliases(platforms)
 
 	// Create and save cache
 	cache := &PlatformsCache{

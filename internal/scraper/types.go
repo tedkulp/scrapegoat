@@ -223,6 +223,18 @@ func (g *Game) GetFirstGenre() string {
 	return g.Genres[0].Name
 }
 
+// IsNonGame checks if the game is marked as a non-game (e.g., demos, applications, etc.)
+// ScreenScraper marks these with names like "ZZZ(notgame):#NONGAME"
+func (g *Game) IsNonGame() bool {
+	// Check all name variants for the NONGAME marker
+	for _, name := range g.Names {
+		if name.Text == "#NONGAME" || name.Text == "ZZZ(notgame):#NONGAME" {
+			return true
+		}
+	}
+	return false
+}
+
 // SystemsListResponse represents the XML response from systemesListe.php
 type SystemsListResponse struct {
 	XMLName xml.Name `xml:"Data"`

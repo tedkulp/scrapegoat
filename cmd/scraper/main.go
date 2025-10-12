@@ -150,15 +150,16 @@ func runListPlatforms(cmd *cobra.Command, args []string) {
 
 		// Create proper URL-safe slug (same logic as config package)
 		// This handles special characters like ², é, etc.
-		platformSlug := slug.Make(fullName)
+		// Remove dashes to make slugs more compact (e.g., "n64dd" instead of "n64-dd")
+		platformSlug := strings.ReplaceAll(slug.Make(fullName), "-", "")
 
 		// If name has multiple comma-separated parts, find the shortest slug
 		if strings.Contains(fullName, ",") {
 			nameParts := strings.Split(fullName, ",")
-			shortestSlug := slug.Make(strings.TrimSpace(nameParts[0]))
+			shortestSlug := strings.ReplaceAll(slug.Make(strings.TrimSpace(nameParts[0])), "-", "")
 
 			for _, part := range nameParts[1:] {
-				partSlug := slug.Make(strings.TrimSpace(part))
+				partSlug := strings.ReplaceAll(slug.Make(strings.TrimSpace(part)), "-", "")
 				if len(partSlug) < len(shortestSlug) {
 					shortestSlug = partSlug
 				}
@@ -166,9 +167,12 @@ func runListPlatforms(cmd *cobra.Command, args []string) {
 			platformSlug = shortestSlug
 		}
 
+		// Use the preferred slug (alias) if one exists
+		displaySlug := config.GetPreferredSlug(platformSlug)
+
 		platforms = append(platforms, platformInfo{
 			id:         system.ID,
-			slug:       platformSlug,
+			slug:       displaySlug,
 			name:       displayName,
 			extensions: system.Extensions,
 		})
@@ -277,6 +281,7 @@ func runScraper(cmd *cobra.Command, args []string) {
 	errorCount := 0
 	var userInfo *scraper.UserInfo
 	var initialRequests int
+	var failedROMs []scanner.ROMFile // Track ROMs that failed to process
 
 	for i, rom := range roms {
 		logInfo("\n[%d/%d] Processing: %s", i+1, len(roms), rom.Filename)
@@ -287,6 +292,7 @@ func runScraper(cmd *cobra.Command, args []string) {
 		if err != nil {
 			logError("  Failed to hash ROM: %v", err)
 			errorCount++
+			failedROMs = append(failedROMs, rom)
 			continue
 		}
 		logVerbose("  CRC32: %s, MD5: %s", hashes.CRC32, hashes.MD5)
@@ -301,6 +307,7 @@ func runScraper(cmd *cobra.Command, args []string) {
 		if err != nil {
 			logError("  Failed to get game info: %v", err)
 			errorCount++
+			failedROMs = append(failedROMs, rom)
 			continue
 		}
 
@@ -318,6 +325,14 @@ func runScraper(cmd *cobra.Command, args []string) {
 			logInfo("  Found: %s (cached)", gameName)
 		} else {
 			logInfo("  Found: %s", gameName)
+		}
+
+		// Check if this is marked as a non-game by ScreenScraper
+		if game.IsNonGame() {
+			logInfo("  Skipping: Marked as non-game by ScreenScraper")
+			errorCount++
+			failedROMs = append(failedROMs, rom)
+			continue
 		}
 
 		if dryRun {
@@ -378,6 +393,7 @@ func runScraper(cmd *cobra.Command, args []string) {
 		if err := gen.AddGameFromScraper(rom.Path, game, downloadedFiles); err != nil {
 			logError("  Failed to add game metadata: %v", err)
 			errorCount++
+			failedROMs = append(failedROMs, rom)
 			continue
 		}
 
@@ -439,6 +455,41 @@ func runScraper(cmd *cobra.Command, args []string) {
 		logInfo("\n=== Cache Info ===")
 		logInfo("Cache directory: %s/games", cacheDir)
 		logInfo("Game data is cached for 12 hours")
+	}
+
+	// Handle failed ROMs - offer to delete them
+	if len(failedROMs) > 0 && !dryRun {
+		logInfo("\n=== Failed ROMs ===")
+		logInfo("The following ROMs failed to process:")
+		for i, rom := range failedROMs {
+			logInfo("  %d. %s", i+1, rom.Filename)
+		}
+
+		// Prompt user to delete failed ROMs
+		logInfo("\nWould you like to delete these ROM files? [y/N]: ")
+		var response string
+		fmt.Scanln(&response)
+		response = strings.ToLower(strings.TrimSpace(response))
+
+		if response == "y" || response == "yes" {
+			logInfo("\nDeleting failed ROM files...")
+			deletedCount := 0
+			deleteErrors := 0
+
+			for _, rom := range failedROMs {
+				if err := os.Remove(rom.Path); err != nil {
+					logError("  Failed to delete %s: %v", rom.Filename, err)
+					deleteErrors++
+				} else {
+					logInfo("  Deleted: %s", rom.Filename)
+					deletedCount++
+				}
+			}
+
+			logInfo("\nDeletion complete: %d deleted, %d errors", deletedCount, deleteErrors)
+		} else {
+			logInfo("\nSkipping deletion. Failed ROM files were kept.")
+		}
 	}
 }
 
