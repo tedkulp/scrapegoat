@@ -204,6 +204,12 @@ func runScraper(cmd *cobra.Command, args []string) {
 		log.Fatalf("Failed to get platform configuration: %v", err)
 	}
 
+	// Expand template variables in paths
+	romDir = expandPathTemplate(romDir, platformName)
+	gamelistDir = expandPathTemplate(gamelistDir, platformName)
+	mediaRootDir = expandPathTemplate(mediaRootDir, platformName)
+	cacheDir = expandPathTemplate(cacheDir, platformName)
+
 	// Set default directories to rom-dir if not specified
 	if gamelistDir == "" {
 		gamelistDir = romDir
@@ -549,6 +555,14 @@ func logVerbose(format string, args ...interface{}) {
 
 func logError(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
+}
+
+// expandPathTemplate replaces template variables in a path string
+// Currently supports: {platform}
+func expandPathTemplate(path string, platformName string) string {
+	// Replace {platform} with the actual platform name
+	path = strings.ReplaceAll(path, "{platform}", platformName)
+	return path
 }
 
 func runUserInfo(cmd *cobra.Command, args []string) {
