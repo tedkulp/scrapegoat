@@ -17,6 +17,7 @@ type Compositor struct {
 	config       Config
 	cacheDir     string
 	resourcesDir string
+	verbose      bool
 }
 
 // NewCompositor creates a new compositor with the given configuration
@@ -25,6 +26,18 @@ func NewCompositor(config Config, cacheDir string) *Compositor {
 		config:       config,
 		cacheDir:     cacheDir,
 		resourcesDir: expandHomeDir(config.ResourcesDir),
+		verbose:      false,
+	}
+}
+
+// SetVerbose enables verbose logging
+func (c *Compositor) SetVerbose(verbose bool) {
+	c.verbose = verbose
+}
+
+func (c *Compositor) logVerbose(format string, args ...interface{}) {
+	if c.verbose {
+		fmt.Printf("    [Artwork] "+format+"\n", args...)
 	}
 }
 
@@ -32,11 +45,15 @@ func NewCompositor(config Config, cacheDir string) *Compositor {
 func (c *Compositor) GenerateArtwork(gameName string, mediaFiles MediaFiles, outputDir string) (map[string]string, error) {
 	generatedFiles := make(map[string]string)
 
+	c.logVerbose("Generating %d output(s) for %s", len(c.config.Outputs), gameName)
+
 	for _, output := range c.config.Outputs {
+		c.logVerbose("Processing output '%s' (%dx%d)", output.Type, output.Width, output.Height)
 		outputPath, err := c.generateOutput(gameName, output, mediaFiles, outputDir)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate '%s' artwork: %v", output.Type, err)
 		}
+		c.logVerbose("Generated: %s", filepath.Base(outputPath))
 		generatedFiles[output.Type] = outputPath
 	}
 
@@ -45,15 +62,25 @@ func (c *Compositor) GenerateArtwork(gameName string, mediaFiles MediaFiles, out
 
 // generateOutput generates a single output image
 func (c *Compositor) generateOutput(gameName string, def OutputDefinition, mediaFiles MediaFiles, outputDir string) (string, error) {
-	// Check if we have all required media files
-	if err := c.validateMediaFiles(def, mediaFiles); err != nil {
-		return "", err
+	// Check if we have at least the first layer's media file
+	if len(def.Layers) == 0 {
+		return "", fmt.Errorf("no layers defined in output")
 	}
+
+	// Validate first layer exists - this is required
+	firstLayerResource := def.Layers[0].Resource
+	if !strings.HasPrefix(firstLayerResource, "custom:") {
+		if _, ok := mediaFiles[firstLayerResource]; !ok {
+			return "", fmt.Errorf("first layer media file not found: %s", firstLayerResource)
+		}
+	}
+	// Additional layers are optional - we'll skip them if media is missing
 
 	// Check cache first
 	cacheKey := c.calculateCacheKey(gameName, def, mediaFiles)
 	cachedPath, found := c.checkCache(cacheKey, def.Format)
 	if found {
+		c.logVerbose("Cache hit for '%s'", def.Type)
 		// Copy from cache to output directory
 		outputPath := filepath.Join(outputDir, fmt.Sprintf("%s-%s.%s", gameName, def.Type, def.Format))
 		if err := copyFile(cachedPath, outputPath); err != nil {
@@ -61,6 +88,7 @@ func (c *Compositor) generateOutput(gameName string, def OutputDefinition, media
 		}
 		return outputPath, nil
 	}
+	c.logVerbose("Cache miss - generating new artwork")
 
 	// Determine output dimensions
 	width := def.Width
@@ -90,10 +118,40 @@ func (c *Compositor) generateOutput(gameName string, def OutputDefinition, media
 	}
 
 	// Process and composite each layer
-	for _, layerDef := range def.Layers {
+	for i, layerDef := range def.Layers {
+		c.logVerbose("Layer %d: resource=%s", i+1, layerDef.Resource)
+
+		// Check if media file exists for this layer (skip if missing, except for first layer)
+		if !strings.HasPrefix(layerDef.Resource, "custom:") {
+			if _, ok := mediaFiles[layerDef.Resource]; !ok {
+				if i == 0 {
+					// First layer is required
+					return "", fmt.Errorf("first layer media file not found: %s", layerDef.Resource)
+				}
+				// Skip optional layers if media is missing
+				c.logVerbose("Skipping layer %d - media not found", i+1)
+				continue
+			}
+		}
+
 		layer, err := ProcessLayer(layerDef, mediaFiles, width, height, c.resourcesDir)
 		if err != nil {
-			return "", fmt.Errorf("failed to process layer: %v", err)
+			if i == 0 {
+				// First layer errors are fatal
+				return "", fmt.Errorf("failed to process first layer: %v", err)
+			}
+			// Skip optional layers that fail to process
+			c.logVerbose("Skipping layer %d - processing failed: %v", i+1, err)
+			continue
+		}
+
+		c.logVerbose("Compositing layer %d at (%d,%d) size %dx%d", i+1, layer.X, layer.Y, layer.Width, layer.Height)
+		if len(layerDef.Effects) > 0 {
+			effectNames := make([]string, len(layerDef.Effects))
+			for j, e := range layerDef.Effects {
+				effectNames[j] = e.Type
+			}
+			c.logVerbose("Applied effects: %s", strings.Join(effectNames, ", "))
 		}
 
 		// Composite layer onto canvas
@@ -108,7 +166,8 @@ func (c *Compositor) generateOutput(gameName string, def OutputDefinition, media
 	}
 
 	// Copy from cache to output directory
-	outputPath := filepath.Join(outputDir, fmt.Sprintf("%s-%s.%s", gameName, def.Type, def.Format))
+	// Use just the game name without the output type suffix for EmulationStation compatibility
+	outputPath := filepath.Join(outputDir, fmt.Sprintf("%s.%s", gameName, def.Format))
 	if err := copyFile(cachedPath, outputPath); err != nil {
 		return "", fmt.Errorf("failed to copy to output: %v", err)
 	}
@@ -116,20 +175,6 @@ func (c *Compositor) generateOutput(gameName string, def OutputDefinition, media
 	return outputPath, nil
 }
 
-// validateMediaFiles checks if all required media files are available
-func (c *Compositor) validateMediaFiles(def OutputDefinition, mediaFiles MediaFiles) error {
-	for _, layer := range def.Layers {
-		// Skip custom resources (they're loaded from resources_dir)
-		if strings.HasPrefix(layer.Resource, "custom:") {
-			continue
-		}
-
-		if _, ok := mediaFiles[layer.Resource]; !ok {
-			return fmt.Errorf("required media file not found: %s", layer.Resource)
-		}
-	}
-	return nil
-}
 
 // createCanvas creates a new canvas with the specified background
 func (c *Compositor) createCanvas(width, height int, background string) (*image.NRGBA, error) {
@@ -180,7 +225,9 @@ func (c *Compositor) calculateCacheKey(gameName string, def OutputDefinition, me
 
 // checkCache checks if a cached version exists
 func (c *Compositor) checkCache(cacheKey, format string) (string, bool) {
-	cachePath := filepath.Join(c.cacheDir, "artwork-cache", fmt.Sprintf("%s.%s", cacheKey, format))
+	// Use first 2 characters of hash for subdirectory (like git does)
+	subdir := cacheKey[:2]
+	cachePath := filepath.Join(c.cacheDir, "artwork-cache", subdir, fmt.Sprintf("%s.%s", cacheKey, format))
 	if _, err := os.Stat(cachePath); err == nil {
 		return cachePath, true
 	}
@@ -189,7 +236,9 @@ func (c *Compositor) checkCache(cacheKey, format string) (string, bool) {
 
 // saveToCache saves an image to the cache
 func (c *Compositor) saveToCache(img image.Image, cacheKey, format string) (string, error) {
-	cacheDir := filepath.Join(c.cacheDir, "artwork-cache")
+	// Use first 2 characters of hash for subdirectory (like git does)
+	subdir := cacheKey[:2]
+	cacheDir := filepath.Join(c.cacheDir, "artwork-cache", subdir)
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
 		return "", err
 	}

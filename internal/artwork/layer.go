@@ -142,46 +142,52 @@ func calculateLayerSize(def LayerDefinition, img image.Image, outputWidth, outpu
 
 // calculateLayerPosition determines the position of a layer
 func calculateLayerPosition(def LayerDefinition, layerWidth, layerHeight, outputWidth, outputHeight int) (int, int, error) {
-	// Parse X position
-	x := 0
+	// Parse X position (as offset, could be negative)
+	xOffset := 0
 	if def.X != "" {
-		pos, err := parsePosition(def.X, outputWidth)
+		offset, err := parseOffset(def.X, outputWidth)
 		if err != nil {
 			return 0, 0, fmt.Errorf("invalid x position: %v", err)
 		}
-		x = pos
+		xOffset = offset
 	}
 
-	// Parse Y position
-	y := 0
+	// Parse Y position (as offset, could be negative)
+	yOffset := 0
 	if def.Y != "" {
-		pos, err := parsePosition(def.Y, outputHeight)
+		offset, err := parseOffset(def.Y, outputHeight)
 		if err != nil {
 			return 0, 0, fmt.Errorf("invalid y position: %v", err)
 		}
-		y = pos
+		yOffset = offset
 	}
 
 	// Apply horizontal alignment
+	var x int
 	switch strings.ToLower(def.Align) {
 	case "center", "centre":
-		x = x + (outputWidth-layerWidth)/2
+		x = (outputWidth-layerWidth)/2 + xOffset
 	case "right":
-		x = outputWidth - layerWidth - x
+		// Negative offset means "from right edge"
+		x = outputWidth - layerWidth + xOffset
 	case "left", "":
-		// Already at the correct position
+		// Positive offset from left edge
+		x = xOffset
 	default:
 		return 0, 0, fmt.Errorf("invalid align value: %s", def.Align)
 	}
 
 	// Apply vertical alignment
+	var y int
 	switch strings.ToLower(def.Valign) {
 	case "middle", "center", "centre":
-		y = y + (outputHeight-layerHeight)/2
+		y = (outputHeight-layerHeight)/2 + yOffset
 	case "bottom":
-		y = outputHeight - layerHeight - y
+		// Negative offset means "from bottom edge"
+		y = outputHeight - layerHeight + yOffset
 	case "top", "":
-		// Already at the correct position
+		// Positive offset from top edge
+		y = yOffset
 	default:
 		return 0, 0, fmt.Errorf("invalid valign value: %s", def.Valign)
 	}
@@ -216,29 +222,25 @@ func parseSize(size string, containerSize int) (int, error) {
 	return pixels, nil
 }
 
-// parsePosition parses a position string (pixels, percentage, or negative offset)
-func parsePosition(pos string, containerSize int) (int, error) {
-	pos = strings.TrimSpace(pos)
+// parseOffset parses an offset string (pixels or percentage, can be negative)
+// This is used for x/y positions where alignment context determines the meaning
+func parseOffset(offset string, containerSize int) (int, error) {
+	offset = strings.TrimSpace(offset)
 
 	// Check for percentage
-	if strings.HasSuffix(pos, "%") {
-		percentStr := strings.TrimSuffix(pos, "%")
+	if strings.HasSuffix(offset, "%") {
+		percentStr := strings.TrimSuffix(offset, "%")
 		percent, err := strconv.ParseFloat(percentStr, 64)
 		if err != nil {
-			return 0, fmt.Errorf("invalid percentage: %s", pos)
+			return 0, fmt.Errorf("invalid percentage: %s", offset)
 		}
 		return int(float64(containerSize) * percent / 100.0), nil
 	}
 
 	// Parse as integer (supports negative values)
-	value, err := strconv.Atoi(pos)
+	value, err := strconv.Atoi(offset)
 	if err != nil {
-		return 0, fmt.Errorf("invalid position value: %s", pos)
-	}
-
-	// If negative, it's an offset from the opposite edge
-	if value < 0 {
-		return containerSize + value, nil
+		return 0, fmt.Errorf("invalid offset value: %s", offset)
 	}
 
 	return value, nil

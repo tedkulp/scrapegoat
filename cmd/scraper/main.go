@@ -65,6 +65,7 @@ var (
 	workers      int
 	dryRun       bool
 	autoDelete   string // "true", "false", or "" (prompt user)
+	artworkFlag  string // "true", "false", or "" (use config)
 )
 
 func init() {
@@ -81,6 +82,7 @@ func init() {
 	scrapeCmd.Flags().IntVarP(&workers, "workers", "w", 4, "number of concurrent download workers")
 	scrapeCmd.Flags().BoolVar(&dryRun, "dry-run", false, "scan and query API but don't download or write files")
 	scrapeCmd.Flags().StringVar(&autoDelete, "auto-delete", "", "automatically delete failed ROMs: true=delete, false=keep, unset=prompt (default: prompt)")
+	scrapeCmd.Flags().StringVar(&artworkFlag, "artwork", "", "enable/disable artwork generation: true=enable, false=disable, unset=use config (default: use config)")
 
 	scrapeCmd.MarkFlagRequired("platform")
 	scrapeCmd.MarkFlagRequired("rom-dir")
@@ -228,6 +230,16 @@ func runScraper(cmd *cobra.Command, args []string) {
 		cacheDir = cfg.Output.CacheDir
 	}
 
+	// Override artwork config with command-line flag if provided
+	if artworkFlag != "" {
+		artworkFlagLower := strings.ToLower(strings.TrimSpace(artworkFlag))
+		if artworkFlagLower == "true" {
+			cfg.Artwork.Enabled = true
+		} else if artworkFlagLower == "false" {
+			cfg.Artwork.Enabled = false
+		}
+	}
+
 	logInfo("Scrapegoat - ROM Scraper")
 	logInfo("Platform: %s (ID: %d)", platform.Name, platform.ID)
 	logInfo("ROM Directory: %s", romDir)
@@ -285,6 +297,7 @@ func runScraper(cmd *cobra.Command, args []string) {
 	var compositor *artwork.Compositor
 	if cfg.Artwork.Enabled && !dryRun {
 		compositor = artwork.NewCompositor(cfg.Artwork, cacheDir)
+		compositor.SetVerbose(verbose)
 		logInfo("Artwork generation: Enabled")
 	}
 
@@ -573,6 +586,7 @@ func buildMediaFileList(game *scraper.Game, romFilename string) []downloader.Med
 		"ss-title":    "titlescreens",
 		"wheel":       "wheel",
 		"video":       "videos",
+		"support-2D":  "physicalmedia",
 	}
 
 	for apiType, esDirectory := range mediaTypeMapping {

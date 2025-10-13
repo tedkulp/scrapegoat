@@ -1,80 +1,44 @@
 package artwork
 
 import (
-	"fmt"
 	"image"
 	"image/color"
-
-	"go.yaml.in/yaml/v3"
 )
 
 // Config represents the artwork generation configuration
 type Config struct {
-	Enabled      bool               `yaml:"enabled"`
-	OutputDir    string             `yaml:"output_dir"`
-	ResourcesDir string             `yaml:"resources_dir"`
-	Outputs      []OutputDefinition `yaml:"outputs"`
+	Enabled      bool               `mapstructure:"enabled"`
+	OutputDir    string             `mapstructure:"output_dir"`
+	ResourcesDir string             `mapstructure:"resources_dir"`
+	Outputs      []OutputDefinition `mapstructure:"outputs"`
 }
 
 // OutputDefinition defines a single output image to generate
 type OutputDefinition struct {
-	Type       string            `yaml:"type"`        // Output type (e.g., "screenshot", "marquee")
-	Width      int               `yaml:"width"`       // Target width in pixels (0 = auto)
-	Height     int               `yaml:"height"`      // Target height in pixels (0 = auto)
-	Format     string            `yaml:"format"`      // Output format: "png", "jpg", "webp"
-	Background string            `yaml:"background"`  // Background color (hex) or "transparent"
-	Layers     []LayerDefinition `yaml:"layers"`      // Layers to composite (bottom to top)
+	Type       string            `mapstructure:"type"`        // Output type (e.g., "screenshot", "marquee")
+	Width      int               `mapstructure:"width"`       // Target width in pixels (0 = auto)
+	Height     int               `mapstructure:"height"`      // Target height in pixels (0 = auto)
+	Format     string            `mapstructure:"format"`      // Output format: "png", "jpg", "webp"
+	Background string            `mapstructure:"background"`  // Background color (hex) or "transparent"
+	Layers     []LayerDefinition `mapstructure:"layers"`      // Layers to composite (bottom to top)
 }
 
 // LayerDefinition defines a single layer in the composition
 type LayerDefinition struct {
-	Resource string                   `yaml:"resource"` // Source media type or "custom:{path}"
-	X        string                   `yaml:"x"`        // X position (pixels, %, or negative)
-	Y        string                   `yaml:"y"`        // Y position
-	Width    string                   `yaml:"width"`    // Width (pixels, %, or "auto")
-	Height   string                   `yaml:"height"`   // Height
-	Align    string                   `yaml:"align"`    // Horizontal align: left, center, right
-	Valign   string                   `yaml:"valign"`   // Vertical align: top, middle, bottom
-	Effects  []EffectDefinition       `yaml:"effects"`  // Effects to apply (in order)
+	Resource string             `mapstructure:"resource"` // Source media type or "custom:{path}"
+	X        string             `mapstructure:"x"`        // X position (pixels, %, or negative)
+	Y        string             `mapstructure:"y"`        // Y position
+	Width    string             `mapstructure:"width"`    // Width (pixels, %, or "auto")
+	Height   string             `mapstructure:"height"`   // Height
+	Align    string             `mapstructure:"align"`    // Horizontal align: left, center, right
+	Valign   string             `mapstructure:"valign"`   // Vertical align: top, middle, bottom
+	Effects  []EffectDefinition `mapstructure:"effects"`  // Effects to apply (in order)
 }
 
 // EffectDefinition defines an effect to apply to a layer
 type EffectDefinition struct {
-	Type   string                 `yaml:"type"`   // Effect type name
-	Params map[string]interface{} // Effect parameters (populated via UnmarshalYAML)
-}
-
-// UnmarshalYAML implements custom YAML unmarshaling for EffectDefinition
-// This captures the "type" field separately and puts all other fields into Params
-func (e *EffectDefinition) UnmarshalYAML(node *yaml.Node) error {
-	// First, unmarshal into a temporary map to get all fields
-	var temp map[string]interface{}
-	if err := node.Decode(&temp); err != nil {
-		return err
-	}
-
-	// Extract the type field
-	typeVal, ok := temp["type"]
-	if !ok {
-		return fmt.Errorf("effect definition missing 'type' field")
-	}
-
-	typeStr, ok := typeVal.(string)
-	if !ok {
-		return fmt.Errorf("effect 'type' must be a string")
-	}
-
-	e.Type = typeStr
-
-	// Everything else goes into Params
-	e.Params = make(map[string]interface{})
-	for key, val := range temp {
-		if key != "type" {
-			e.Params[key] = val
-		}
-	}
-
-	return nil
+	Type   string                 `mapstructure:"type"`    // Effect type name
+	Params map[string]interface{} `mapstructure:",remain"` // All other fields become params
 }
 
 // Effect is the interface that all effects must implement
