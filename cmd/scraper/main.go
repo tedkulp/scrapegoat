@@ -62,6 +62,7 @@ var (
 	cacheDir     string
 	workers      int
 	dryRun       bool
+	autoDelete   string // "true", "false", or "" (prompt user)
 )
 
 func init() {
@@ -77,6 +78,7 @@ func init() {
 	scrapeCmd.Flags().StringVar(&cacheDir, "cache-dir", "", "cache directory for downloaded media (default: ~/.scrapegoat)")
 	scrapeCmd.Flags().IntVarP(&workers, "workers", "w", 4, "number of concurrent download workers")
 	scrapeCmd.Flags().BoolVar(&dryRun, "dry-run", false, "scan and query API but don't download or write files")
+	scrapeCmd.Flags().StringVar(&autoDelete, "auto-delete", "", "automatically delete failed ROMs: true=delete, false=keep, unset=prompt (default: prompt)")
 
 	scrapeCmd.MarkFlagRequired("platform")
 	scrapeCmd.MarkFlagRequired("rom-dir")
@@ -437,14 +439,31 @@ func runScraper(cmd *cobra.Command, args []string) {
 			logInfo("  %d. %s", i+1, rom.Filename)
 		}
 
-		// Prompt user to delete failed ROMs
-		logInfo("\nWould you like to delete these ROM files? [y/N]: ")
-		var response string
-		fmt.Scanln(&response)
-		response = strings.ToLower(strings.TrimSpace(response))
+		// Determine whether to delete based on auto-delete flag
+		var shouldDelete bool
+		autoDeleteLower := strings.ToLower(strings.TrimSpace(autoDelete))
 
-		if response == "y" || response == "yes" {
-			logInfo("\nDeleting failed ROM files...")
+		if autoDeleteLower == "true" {
+			// Auto-delete enabled
+			shouldDelete = true
+			logInfo("\nAuto-deleting failed ROM files (--auto-delete=true)...")
+		} else if autoDeleteLower == "false" {
+			// Auto-delete explicitly disabled
+			shouldDelete = false
+			logInfo("\nKeeping failed ROM files (--auto-delete=false)")
+		} else {
+			// Prompt user (default behavior)
+			logInfo("\nWould you like to delete these ROM files? [y/N]: ")
+			var response string
+			fmt.Scanln(&response)
+			response = strings.ToLower(strings.TrimSpace(response))
+			shouldDelete = (response == "y" || response == "yes")
+		}
+
+		if shouldDelete {
+			if autoDeleteLower != "true" {
+				logInfo("\nDeleting failed ROM files...")
+			}
 			deletedCount := 0
 			deleteErrors := 0
 
@@ -460,7 +479,9 @@ func runScraper(cmd *cobra.Command, args []string) {
 
 			logInfo("\nDeletion complete: %d deleted, %d errors", deletedCount, deleteErrors)
 		} else {
-			logInfo("\nSkipping deletion. Failed ROM files were kept.")
+			if autoDeleteLower != "false" {
+				logInfo("\nSkipping deletion. Failed ROM files were kept.")
+			}
 		}
 	}
 
