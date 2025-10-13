@@ -1,8 +1,11 @@
 package artwork
 
 import (
+	"fmt"
 	"image"
 	"image/color"
+
+	"go.yaml.in/yaml/v3"
 )
 
 // Config represents the artwork generation configuration
@@ -38,7 +41,40 @@ type LayerDefinition struct {
 // EffectDefinition defines an effect to apply to a layer
 type EffectDefinition struct {
 	Type   string                 `yaml:"type"`   // Effect type name
-	Params map[string]interface{} `yaml:",inline"` // Effect parameters
+	Params map[string]interface{} // Effect parameters (populated via UnmarshalYAML)
+}
+
+// UnmarshalYAML implements custom YAML unmarshaling for EffectDefinition
+// This captures the "type" field separately and puts all other fields into Params
+func (e *EffectDefinition) UnmarshalYAML(node *yaml.Node) error {
+	// First, unmarshal into a temporary map to get all fields
+	var temp map[string]interface{}
+	if err := node.Decode(&temp); err != nil {
+		return err
+	}
+
+	// Extract the type field
+	typeVal, ok := temp["type"]
+	if !ok {
+		return fmt.Errorf("effect definition missing 'type' field")
+	}
+
+	typeStr, ok := typeVal.(string)
+	if !ok {
+		return fmt.Errorf("effect 'type' must be a string")
+	}
+
+	e.Type = typeStr
+
+	// Everything else goes into Params
+	e.Params = make(map[string]interface{})
+	for key, val := range temp {
+		if key != "type" {
+			e.Params[key] = val
+		}
+	}
+
+	return nil
 }
 
 // Effect is the interface that all effects must implement

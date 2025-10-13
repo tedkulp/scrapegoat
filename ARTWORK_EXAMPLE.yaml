@@ -1,0 +1,100 @@
+# YAML Equivalent of Skyscraper's Example artwork.xml
+#
+# Original XML: https://github.com/muldjord/skyscraper/blob/master/docs/ARTWORK.md
+#
+# This example demonstrates a composite screenshot with:
+# - Rounded screenshot in the center with a border
+# - Game cover in the bottom-left corner with shadow
+# - Wheel logo in the top-right corner with shadow
+
+artwork:
+  enabled: true
+  output_dir: "artwork"
+
+  outputs:
+    - type: screenshot
+      width: 640
+      height: 480
+      format: png
+      # Note: Skyscraper's example doesn't specify a background,
+      # so we'll use transparent (or could use a color like "#000000")
+      background: "transparent"
+
+      layers:
+        # Layer 1: Main screenshot with rounded corners and border
+        - resource: screenshots  # In Scrapegoat, this maps to the "screenshots" media type
+          x: 20
+          y: 0  # Skyscraper defaults to top, we specify explicitly
+          width: 520
+          height: 390
+          align: center
+          valign: middle
+          effects:
+            - type: rounded
+              radius: 10
+            - type: stroke
+              width: 5
+              color: "#FFFFFF"  # Skyscraper defaults to white
+              opacity: 100
+
+        # Layer 2: Game cover in bottom corner with shadow
+        # Note: Skyscraper's "gamebox" effect is not yet implemented in Phase 1
+        # We'll render the cover as-is for now
+        - resource: box2dfront  # "cover" in Skyscraper maps to "box2dfront" in Scrapegoat
+          height: 250
+          width: auto  # Maintain aspect ratio based on height
+          x: 0
+          y: -10  # Negative offset from bottom edge
+          align: left  # Default, specified for clarity
+          valign: bottom
+          effects:
+            - type: shadow
+              distance: 5
+              softness: 5
+              opacity: 70
+              angle: 135  # Default shadow direction (bottom-right)
+              color: "#000000"
+
+        # Layer 3: Wheel logo in top-right corner with shadow
+        - resource: wheel
+          width: 250
+          height: auto  # Maintain aspect ratio based on width
+          x: -10  # Negative offset from right edge
+          y: 0  # Top of the canvas
+          align: right
+          valign: top  # Default, specified for clarity
+          effects:
+            - type: shadow
+              distance: 5
+              softness: 5
+              opacity: 70
+              angle: 135
+              color: "#000000"
+
+# Notes on differences from Skyscraper's XML:
+#
+# 1. **Resource Names**: Scrapegoat uses EmulationStation's media type names:
+#    - "screenshot" (XML) → "screenshots" (YAML)
+#    - "cover" (XML) → "box2dfront" (YAML)
+#    - "wheel" (XML) → "wheel" (YAML) - same
+#
+# 2. **Gamebox Effect**: Not implemented in Phase 1
+#    - The `<gamebox side="wheel" rotate="90"/>` effect is not available yet
+#    - This would rotate the cover to look like a game box spine
+#    - For now, the cover renders normally without rotation
+#
+# 3. **Stroke Color**: Skyscraper defaults to white, we specify explicitly
+#
+# 4. **Shadow Angle**: We specify angle explicitly (135° = bottom-right)
+#    - Skyscraper may have different defaults
+#
+# 5. **Background**: We specify "transparent" explicitly
+#    - Skyscraper's default may be different
+#
+# 6. **Width/Height "auto"**: We use "auto" to maintain aspect ratio
+#    - Skyscraper may calculate this differently
+#
+# Future enhancements needed for full Skyscraper compatibility:
+# - Gamebox effect (3D perspective rotation)
+# - Additional positioning options
+# - More transform effects (rotate, skew, perspective)
