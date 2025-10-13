@@ -10,14 +10,16 @@ import (
 
 	"github.com/gosimple/slug"
 	"github.com/spf13/viper"
+	"github.com/tedkulp/scrapegoat/internal/artwork"
 	"github.com/tedkulp/scrapegoat/internal/scraper"
 )
 
 // Config represents the application configuration
 type Config struct {
-	ScreenScraper ScreenScraperConfig `mapstructure:"screenscraper"`
-	Platforms     map[string]Platform `mapstructure:"platforms"`
-	Output        OutputConfig        `mapstructure:"output"`
+	ScreenScraper  ScreenScraperConfig `mapstructure:"screenscraper"`
+	Platforms      map[string]Platform `mapstructure:"platforms"`
+	Output         OutputConfig        `mapstructure:"output"`
+	Artwork        artwork.Config      `mapstructure:"artwork"`
 	platformsCache *PlatformsCache
 }
 
@@ -77,9 +79,15 @@ func Load(configPath string) (*Config, error) {
 	home, err := os.UserHomeDir()
 	if err == nil {
 		v.SetDefault("output.cache_dir", filepath.Join(home, ".scrapegoat"))
+		v.SetDefault("artwork.resources_dir", filepath.Join(home, ".scrapegoat", "resources"))
 	} else {
 		v.SetDefault("output.cache_dir", "/tmp/scrapegoat")
+		v.SetDefault("artwork.resources_dir", "/tmp/scrapegoat/resources")
 	}
+
+	// Artwork defaults
+	v.SetDefault("artwork.enabled", false)
+	v.SetDefault("artwork.output_dir", "artwork")
 
 	// Read config file
 	if err := v.ReadInConfig(); err != nil {

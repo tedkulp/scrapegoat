@@ -33,3 +33,70 @@ output:
   gamelist_file: "gamelist.xml"
   media_dir: "media"
   # cache_dir: "~/.scrapegoat"  # Default: ~/.scrapegoat - persistent cache for downloaded media
+
+# Artwork generation settings (OPTIONAL)
+# Generate custom composed artwork from downloaded media files
+# artwork:
+#   enabled: false  # Set to true to enable artwork generation
+#   output_dir: "artwork"  # Subdirectory for generated artwork (relative to media-root-dir)
+#   resources_dir: "~/.scrapegoat/resources"  # Directory for custom images (frames, masks, etc.)
+#
+#   # Define output types - each generates one image per game
+#   outputs:
+#     # Example: Enhanced screenshot with rounded corners and shadow
+#     - type: screenshot
+#       width: 640
+#       height: 480
+#       format: png
+#       background: "#000000"
+#       layers:
+#         - resource: screenshot
+#           align: center
+#           valign: middle
+#           effects:
+#             - type: rounded
+#               radius: 15
+#             - type: shadow
+#               distance: 8
+#               softness: 10
+#               opacity: 50
+#
+#     # Example: Composite with blurred background and cover overlay
+#     - type: composite
+#       width: 800
+#       height: 600
+#       background: "#1a1a1a"
+#       layers:
+#         # Blurred background
+#         - resource: screenshot
+#           width: 100%
+#           height: 100%
+#           effects:
+#             - type: blur
+#               radius: 20
+#             - type: opacity
+#               value: 30
+#         # Main screenshot
+#         - resource: screenshot
+#           width: 60%
+#           align: center
+#           valign: middle
+#           effects:
+#             - type: rounded
+#               radius: 10
+#             - type: stroke
+#               width: 3
+#               color: "#FFFFFF"
+#               opacity: 100
+#         # Cover in corner
+#         - resource: cover
+#           height: 40%
+#           x: -20
+#           y: -20
+#           align: right
+#           valign: bottom
+#           effects:
+#             - type: shadow
+#               distance: 10
+#               softness: 15
+#               opacity: 80

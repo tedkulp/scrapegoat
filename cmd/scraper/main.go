@@ -10,6 +10,8 @@ import (
 
 	"github.com/gosimple/slug"
 	"github.com/spf13/cobra"
+	"github.com/tedkulp/scrapegoat/internal/artwork"
+	_ "github.com/tedkulp/scrapegoat/internal/artwork/effects" // Register effects
 	"github.com/tedkulp/scrapegoat/internal/downloader"
 	"github.com/tedkulp/scrapegoat/internal/metadata"
 	"github.com/tedkulp/scrapegoat/internal/scanner"
@@ -279,6 +281,13 @@ func runScraper(cmd *cobra.Command, args []string) {
 		dl.SetDebug(verbose)
 	}
 
+	// Step 3.5: Initialize artwork compositor if enabled
+	var compositor *artwork.Compositor
+	if cfg.Artwork.Enabled && !dryRun {
+		compositor = artwork.NewCompositor(cfg.Artwork, cacheDir)
+		logInfo("Artwork generation: Enabled")
+	}
+
 	// Step 4: Initialize metadata generator
 	// Note: mediaRootDir is used directly, no longer needs cfg.Output.MediaDir subdirectory
 	gen := metadata.NewGenerator(gamelistDir, mediaRootDir)
@@ -349,6 +358,9 @@ func runScraper(cmd *cobra.Command, args []string) {
 			continue
 		}
 
+		// Get ROM name without extension for media filenames and artwork
+		romName := strings.TrimSuffix(rom.Filename, filepath.Ext(rom.Filename))
+
 		// Download media files
 		mediaFiles := buildMediaFileList(game, rom.Filename)
 		logVerbose("  Downloading %d media files...", len(mediaFiles))
@@ -394,6 +406,29 @@ func runScraper(cmd *cobra.Command, args []string) {
 				logInfo("  Media: %d from cache", cachedCount)
 			} else if downloadedCount > 0 {
 				logInfo("  Media: %d downloaded", downloadedCount)
+			}
+		}
+
+		// Generate artwork if enabled
+		if compositor != nil && len(downloadedFiles) > 0 {
+			logVerbose("  Generating artwork...")
+			artworkDir := filepath.Join(mediaRootDir, cfg.Artwork.OutputDir)
+
+			// Convert downloadedFiles to artwork.MediaFiles format (just type name without directory)
+			artworkMediaFiles := make(artwork.MediaFiles)
+			for mediaType, fullPath := range downloadedFiles {
+				artworkMediaFiles[mediaType] = fullPath
+			}
+
+			artworkFiles, err := compositor.GenerateArtwork(romName, artworkMediaFiles, artworkDir)
+			if err != nil {
+				logVerbose("  Warning: Failed to generate artwork: %v", err)
+			} else {
+				logVerbose("  Generated %d artwork files", len(artworkFiles))
+				// Add artwork files to downloadedFiles so they're included in gamelist.xml
+				for artType, artPath := range artworkFiles {
+					downloadedFiles[artType] = artPath
+				}
 			}
 		}
 
