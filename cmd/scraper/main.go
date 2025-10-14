@@ -583,7 +583,7 @@ func buildMediaFileList(game *scraper.Game, romFilename string) []downloader.Med
 		"box-2D-back": "backcovers",
 		"manuel":      "manuals",
 		"ss":          "screenshots",
-		"ss-title":    "titlescreens",
+		"sstitle":     "titlescreens",
 		"wheel":       "wheel",
 		"video":       "videos",
 		"support-2D":  "physicalmedia",
