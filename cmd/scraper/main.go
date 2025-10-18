@@ -66,6 +66,7 @@ var (
 	dryRun       bool
 	autoDelete   string // "true", "false", or "" (prompt user)
 	artworkFlag  string // "true", "false", or "" (use config)
+	cacheHours   int    // hours before cache expires (default: 12)
 )
 
 func init() {
@@ -83,6 +84,7 @@ func init() {
 	scrapeCmd.Flags().BoolVar(&dryRun, "dry-run", false, "scan and query API but don't download or write files")
 	scrapeCmd.Flags().StringVar(&autoDelete, "auto-delete", "", "automatically delete failed ROMs: true=delete, false=keep, unset=prompt (default: prompt)")
 	scrapeCmd.Flags().StringVar(&artworkFlag, "artwork", "", "enable/disable artwork generation: true=enable, false=disable, unset=use config (default: use config)")
+	scrapeCmd.Flags().IntVar(&cacheHours, "cache-hours", 12, "hours before cache expires for both platforms and ROM metadata (default: 12)")
 
 	scrapeCmd.MarkFlagRequired("platform")
 	scrapeCmd.MarkFlagRequired("rom-dir")
@@ -204,6 +206,9 @@ func runScraper(cmd *cobra.Command, args []string) {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
+	// Set cache expiration time for both platforms and ROM metadata
+	cfg.SetCacheExpiration(cacheHours)
+
 	// Get platform configuration
 	platform, err := cfg.GetPlatform(platformName)
 	if err != nil {
@@ -276,8 +281,8 @@ func runScraper(cmd *cobra.Command, args []string) {
 		cfg.ScreenScraper.SoftwareName,
 	)
 
-	// Enable caching
-	scraperClient.SetCache(cacheDir)
+	// Enable caching with configured expiration time
+	scraperClient.SetCache(cacheDir, cfg.GetCacheExpiration())
 
 	// Enable debug mode if verbose
 	scraperClient.SetDebug(verbose)

@@ -8,10 +8,13 @@ package config
 // Note: Platform slugs are automatically generated without dashes (e.g., "n64dd", "wiiu")
 // so you generally only need aliases for platforms with unconventional slugs.
 var platformAliases = map[string]string{
-	"atari2600":  "2600",
-	"atari5200":  "5200",
-	"n64dd":      "64dd",
-	"virtualboy": "vboy",
+	"atari2600":    "2600",
+	"atari5200":    "5200",
+	"gameandwatch": "gw",
+	"ngp":          "gp",
+	"n64dd":        "64dd",
+	"virtualboy":   "vboy",
+	"tg16":         "turbografx16",
 }
 
 // applyPlatformAliases adds alias mappings to the platforms cache

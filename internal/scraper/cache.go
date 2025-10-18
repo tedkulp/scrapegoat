@@ -10,13 +10,18 @@ import (
 
 // GameCache handles caching of game information
 type GameCache struct {
-	cacheDir string
+	cacheDir         string
+	expirationHours  int
 }
 
 // NewGameCache creates a new game cache
-func NewGameCache(cacheDir string) *GameCache {
+func NewGameCache(cacheDir string, expirationHours int) *GameCache {
+	if expirationHours <= 0 {
+		expirationHours = 12
+	}
 	return &GameCache{
-		cacheDir: cacheDir,
+		cacheDir:        cacheDir,
+		expirationHours: expirationHours,
 	}
 }
 
@@ -34,42 +39,82 @@ func (gc *GameCache) getCacheFilePath(cacheKey string) string {
 	return filepath.Join(gc.cacheDir, "games", subdir, cacheKey+".json")
 }
 
+// CacheResult represents a cache lookup result
+type CacheResult struct {
+	Game      *Game
+	Found     bool // True if cache entry exists and is not expired
+	NotFound  bool // True if ROM was previously looked up and not found
+	IsNonGame bool // True if ROM was previously looked up and is a non-game
+}
+
 // Get retrieves cached game info if available and not expired
-func (gc *GameCache) Get(hashes *ROMHashes) (*Game, bool) {
+// Returns a CacheResult with information about what was found in cache
+func (gc *GameCache) Get(hashes *ROMHashes) CacheResult {
 	cacheKey := gc.getCacheKey(hashes)
 	cacheFile := gc.getCacheFilePath(cacheKey)
 
 	data, err := os.ReadFile(cacheFile)
 	if err != nil {
-		return nil, false
+		return CacheResult{Found: false}
 	}
 
 	var entry GameCacheEntry
 	if err := json.Unmarshal(data, &entry); err != nil {
-		return nil, false
+		return CacheResult{Found: false}
 	}
 
 	// Check if expired
-	if entry.IsExpired() {
-		return nil, false
+	if entry.IsExpired(gc.expirationHours) {
+		return CacheResult{Found: false}
 	}
 
-	return entry.Game, true
+	// Return cached result (could be positive or negative)
+	return CacheResult{
+		Game:      entry.Game,
+		Found:     true,
+		NotFound:  entry.NotFound,
+		IsNonGame: entry.IsNonGame,
+	}
 }
 
 // Set saves game info to cache
 func (gc *GameCache) Set(hashes *ROMHashes, game *Game) error {
+	return gc.setCacheEntry(hashes, GameCacheEntry{
+		FetchedAt: time.Now(),
+		Game:      game,
+		NotFound:  false,
+		IsNonGame: false,
+	})
+}
+
+// SetNotFound caches a "not found" result for a ROM
+func (gc *GameCache) SetNotFound(hashes *ROMHashes) error {
+	return gc.setCacheEntry(hashes, GameCacheEntry{
+		FetchedAt: time.Now(),
+		Game:      nil,
+		NotFound:  true,
+		IsNonGame: false,
+	})
+}
+
+// SetNonGame caches a "non-game" result for a ROM
+func (gc *GameCache) SetNonGame(hashes *ROMHashes, game *Game) error {
+	return gc.setCacheEntry(hashes, GameCacheEntry{
+		FetchedAt: time.Now(),
+		Game:      game,
+		NotFound:  false,
+		IsNonGame: true,
+	})
+}
+
+// setCacheEntry is the internal method that writes cache entries
+func (gc *GameCache) setCacheEntry(hashes *ROMHashes, entry GameCacheEntry) error {
 	cacheKey := gc.getCacheKey(hashes)
 	cacheFile := gc.getCacheFilePath(cacheKey)
 
 	// Ensure cache directory exists
 	if err := os.MkdirAll(filepath.Dir(cacheFile), 0755); err != nil {
 		return fmt.Errorf("failed to create cache directory: %w", err)
-	}
-
-	entry := GameCacheEntry{
-		FetchedAt: time.Now(),
-		Game:      game,
 	}
 
 	data, err := json.MarshalIndent(entry, "", "  ")
@@ -105,7 +150,7 @@ func (gc *GameCache) GetCacheStats() (total int, expired int, err error) {
 		}
 
 		var entry GameCacheEntry
-		if json.Unmarshal(data, &entry) == nil && entry.IsExpired() {
+		if json.Unmarshal(data, &entry) == nil && entry.IsExpired(gc.expirationHours) {
 			expired++
 		}
 

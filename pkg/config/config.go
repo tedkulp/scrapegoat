@@ -21,6 +21,7 @@ type Config struct {
 	Output         OutputConfig        `mapstructure:"output"`
 	Artwork        artwork.Config      `mapstructure:"artwork"`
 	platformsCache *PlatformsCache
+	cacheExpHours  int // Cache expiration in hours for platforms and ROM metadata (default: 12)
 }
 
 // ScreenScraperConfig holds API authentication credentials
@@ -118,6 +119,19 @@ func Load(configPath string) (*Config, error) {
 	return &config, nil
 }
 
+// SetCacheExpiration sets the cache expiration time in hours for both platforms and ROM metadata
+func (c *Config) SetCacheExpiration(hours int) {
+	c.cacheExpHours = hours
+}
+
+// GetCacheExpiration returns the cache expiration time in hours
+func (c *Config) GetCacheExpiration() int {
+	if c.cacheExpHours <= 0 {
+		return 12 // default
+	}
+	return c.cacheExpHours
+}
+
 // GetPlatform returns platform configuration by name
 // If not found in config.yaml, attempts to fetch from ScreenScraper API
 func (c *Config) GetPlatform(name string) (Platform, error) {
@@ -155,9 +169,9 @@ func (pc *PlatformsCache) FindByName(name string) (Platform, bool) {
 	return platform, ok
 }
 
-// IsExpired checks if the cache is older than 12 hours
-func (pc *PlatformsCache) IsExpired() bool {
-	return time.Since(pc.FetchedAt) > 12*time.Hour
+// IsExpired checks if the cache is older than the specified duration
+func (pc *PlatformsCache) IsExpired(expirationHours int) bool {
+	return time.Since(pc.FetchedAt) > time.Duration(expirationHours)*time.Hour
 }
 
 // loadPlatformsFromAPI fetches platforms from ScreenScraper and caches them
@@ -165,7 +179,9 @@ func (c *Config) loadPlatformsFromAPI() error {
 	cacheFile := filepath.Join(c.Output.CacheDir, "platforms.json")
 
 	// Try to load from cache file first
-	if cache, err := loadPlatformsCache(cacheFile); err == nil && !cache.IsExpired() {
+	if cache, err := loadPlatformsCache(cacheFile); err == nil && !cache.IsExpired(c.GetCacheExpiration()) {
+		// Apply platform aliases even when loading from cache
+		applyPlatformAliases(cache.Platforms)
 		c.platformsCache = cache
 		return nil
 	}

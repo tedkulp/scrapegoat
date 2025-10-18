@@ -2,6 +2,7 @@ package scraper
 
 import (
 	"encoding/xml"
+	"strings"
 	"time"
 )
 
@@ -228,7 +229,7 @@ func (g *Game) GetFirstGenre() string {
 func (g *Game) IsNonGame() bool {
 	// Check all name variants for the NONGAME marker
 	for _, name := range g.Names {
-		if name.Text == "#NONGAME" || name.Text == "ZZZ(notgame):#NONGAME" {
+		if strings.Contains(name.Text, "#NONGAME") || strings.Contains(name.Text, "notgame") {
 			return true
 		}
 	}
@@ -278,22 +279,27 @@ type UserInfo struct {
 
 // GameCacheEntry represents a cached game info entry
 type GameCacheEntry struct {
-	FetchedAt time.Time `json:"fetched_at"`
-	Game      *Game     `json:"game"`
+	FetchedAt  time.Time `json:"fetched_at"`
+	Game       *Game     `json:"game"`
+	NotFound   bool      `json:"not_found"`   // True if ROM was not found in API
+	IsNonGame  bool      `json:"is_non_game"` // True if ROM is marked as non-game
 }
 
-// IsExpired checks if the cache entry is older than 12 hours
-func (g *GameCacheEntry) IsExpired() bool {
-	return time.Since(g.FetchedAt) > 12*time.Hour
+// IsExpired checks if the cache entry is older than the specified duration
+func (g *GameCacheEntry) IsExpired(expirationHours int) bool {
+	if expirationHours <= 0 {
+		expirationHours = 12
+	}
+	return time.Since(g.FetchedAt) > time.Duration(expirationHours)*time.Hour
 }
 
 // SystemJSON represents a gaming platform/system from ScreenScraper (JSON format)
 type SystemJSON struct {
-	ID         int    `json:"id"`
-	Names      struct {
-		US        string `json:"nom_us"`
-		EU        string `json:"nom_eu"`
-		Common    string `json:"noms_commun"`
+	ID    int `json:"id"`
+	Names struct {
+		US     string `json:"nom_us"`
+		EU     string `json:"nom_eu"`
+		Common string `json:"noms_commun"`
 	} `json:"noms"`
 	Extensions string `json:"extensions"` // Comma-separated list
 }

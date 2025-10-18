@@ -50,8 +50,8 @@ func (c *Client) SetDebug(debug bool) {
 }
 
 // SetCache sets the cache for the client
-func (c *Client) SetCache(cacheDir string) {
-	c.cache = NewGameCache(cacheDir)
+func (c *Client) SetCache(cacheDir string, expirationHours int) {
+	c.cache = NewGameCache(cacheDir, expirationHours)
 }
 
 // GetGameInfo fetches game information from ScreenScraper API with retry logic
@@ -60,11 +60,20 @@ func (c *Client) SetCache(cacheDir string) {
 func (c *Client) GetGameInfo(systemID int, romName string, hashes *ROMHashes) (*Game, *UserInfo, bool, error) {
 	// Check cache first if enabled
 	if c.cache != nil && hashes != nil {
-		if cachedGame, found := c.cache.Get(hashes); found {
+		result := c.cache.Get(hashes)
+		if result.Found {
 			if c.debug {
-				fmt.Fprintf(os.Stderr, "[DEBUG] API: GetGameInfo - CACHED (no API call)\n")
+				if result.NotFound {
+					fmt.Fprintf(os.Stderr, "[DEBUG] API: GetGameInfo - CACHED (not found)\n")
+				} else if result.IsNonGame {
+					fmt.Fprintf(os.Stderr, "[DEBUG] API: GetGameInfo - CACHED (non-game)\n")
+				} else {
+					fmt.Fprintf(os.Stderr, "[DEBUG] API: GetGameInfo - CACHED (game found)\n")
+				}
 			}
-			return cachedGame, nil, true, nil
+			// Return cached result even if it's a negative result (not found or non-game)
+			// Caller will need to check if Game is nil
+			return result.Game, nil, true, nil
 		}
 	}
 
@@ -97,7 +106,7 @@ func (c *Client) GetGameInfo(systemID int, romName string, hashes *ROMHashes) (*
 	apiURL := fmt.Sprintf("%s/jeuInfos.php?%s", apiBaseURL, params.Encode())
 
 	// Retry logic: 3 attempts with exponential backoff
-	maxRetries := 3
+	maxRetries := 1
 	var lastErr error
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
@@ -141,17 +150,28 @@ func (c *Client) GetGameInfo(systemID int, romName string, hashes *ROMHashes) (*
 		}
 
 		if apiResp.Response.Game == nil {
+			// Cache the "not found" result to avoid repeated API calls
+			if c.cache != nil && hashes != nil {
+				if err := c.cache.SetNotFound(hashes); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: failed to cache 'not found' result: %v\n", err)
+				}
+			}
 			return nil, nil, false, fmt.Errorf("game not found in ScreenScraper database")
 		}
 
 		game := apiResp.Response.Game
 		userInfo := &apiResp.Response.SSUser
 
-		// Save to cache if enabled
+		// Check if this is a non-game and cache appropriately
 		if c.cache != nil && hashes != nil {
-			if err := c.cache.Set(hashes, game); err != nil {
-				// Log warning but don't fail - caching is optional
-				fmt.Fprintf(os.Stderr, "Warning: failed to cache game data: %v\n", err)
+			if game.IsNonGame() {
+				if err := c.cache.SetNonGame(hashes, game); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: failed to cache non-game data: %v\n", err)
+				}
+			} else {
+				if err := c.cache.Set(hashes, game); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: failed to cache game data: %v\n", err)
+				}
 			}
 		}
 
