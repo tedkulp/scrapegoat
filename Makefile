@@ -1,4 +1,4 @@
-.PHONY: help build clean install test fmt vet lint tidy all
+.PHONY: help build clean install test fmt vet lint tidy all release
 
 .DEFAULT_GOAL := help
 
@@ -68,3 +68,33 @@ user-info: build
 ## all: Format, vet, test, and build
 all: fmt vet test build
 	@echo "All tasks complete"
+
+## release: Create and push a git tag for GoReleaser (reads version from main.go)
+release:
+	@echo "Preparing release..."
+	@VERSION=$$(grep '^[[:space:]]*version = ' cmd/scraper/main.go | sed 's/.*= "\(.*\)"/\1/'); \
+	if [ -z "$$VERSION" ] || [ "$$VERSION" = "dev" ]; then \
+		echo "Error: Invalid version '$$VERSION' in cmd/scraper/main.go"; \
+		echo "Please update the version variable to a valid version (e.g., \"1.0.0\")"; \
+		exit 1; \
+	fi; \
+	TAG="v$$VERSION"; \
+	echo "Version: $$VERSION"; \
+	echo "Tag: $$TAG"; \
+	echo ""; \
+	if [ -n "$$(git status --porcelain)" ]; then \
+		echo "Error: Working directory is not clean. Please commit or stash changes."; \
+		git status --short; \
+		exit 1; \
+	fi; \
+	if git rev-parse "$$TAG" >/dev/null 2>&1; then \
+		echo "Error: Tag $$TAG already exists"; \
+		exit 1; \
+	fi; \
+	echo "Creating tag $$TAG..."; \
+	git tag -a "$$TAG" -m "Release $$TAG"; \
+	echo "Pushing tag $$TAG to origin..."; \
+	git push origin "$$TAG"; \
+	echo ""; \
+	echo "Release $$TAG created and pushed successfully!"; \
+	echo "GitHub Actions will now build and publish the release."

@@ -20,6 +20,7 @@ import (
 )
 
 var (
+	version = "1.0.0"
 	cfgFile string
 	verbose bool
 )
@@ -53,6 +54,15 @@ var userInfoCmd = &cobra.Command{
 	Short: "Display user account and API quota information",
 	Long:  `Fetches and displays your ScreenScraper account information including API request limits and usage.`,
 	Run:   runUserInfo,
+}
+
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Display version information",
+	Long:  `Display the version of scrapegoat.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Printf("scrapegoat version %s\n", version)
+	},
 }
 
 var (
@@ -93,6 +103,7 @@ func init() {
 	rootCmd.AddCommand(scrapeCmd)
 	rootCmd.AddCommand(listPlatformsCmd)
 	rootCmd.AddCommand(userInfoCmd)
+	rootCmd.AddCommand(versionCmd)
 }
 
 func main() {
