@@ -67,16 +67,17 @@ var versionCmd = &cobra.Command{
 
 var (
 	// Scrape command flags
-	platformName string
-	romDir       string
-	gamelistDir  string
-	mediaRootDir string
-	cacheDir     string
-	workers      int
-	dryRun       bool
-	autoDelete   string // "true", "false", or "" (prompt user)
-	artworkFlag  string // "true", "false", or "" (use config)
-	cacheHours   int    // hours before cache expires (default: 12)
+	platformName    string
+	romDir          string
+	gamelistDir     string
+	mediaRootDir    string
+	cacheDir        string
+	workers         int
+	dryRun          bool
+	autoDelete      string // "true", "false", or "" (prompt user)
+	artworkFlag     string // "true", "false", or "" (use config)
+	cacheHours      int    // hours before cache expires (default: 12)
+	forceRedownload bool
 )
 
 func init() {
@@ -95,6 +96,7 @@ func init() {
 	scrapeCmd.Flags().StringVar(&autoDelete, "auto-delete", "", "automatically delete failed ROMs: true=delete, false=keep, unset=prompt (default: prompt)")
 	scrapeCmd.Flags().StringVar(&artworkFlag, "artwork", "", "enable/disable artwork generation: true=enable, false=disable, unset=use config (default: use config)")
 	scrapeCmd.Flags().IntVar(&cacheHours, "cache-hours", 12, "hours before cache expires for both platforms and ROM metadata (default: 12)")
+	scrapeCmd.Flags().BoolVar(&forceRedownload, "force-redownload", false, "re-download media files even if they already exist in the destination directory")
 
 	scrapeCmd.MarkFlagRequired("platform")
 	scrapeCmd.MarkFlagRequired("rom-dir")
