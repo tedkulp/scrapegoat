@@ -586,6 +586,19 @@ func runScraper(cmd *cobra.Command, args []string) {
 	}
 }
 
+func filterExistingMediaFiles(mediaFiles []downloader.MediaFile, mediaRootDir string) (existing map[string]string, toDownload []downloader.MediaFile) {
+	existing = make(map[string]string)
+	for _, mf := range mediaFiles {
+		finalPath := filepath.Join(mediaRootDir, mf.Type, mf.Filename)
+		if _, err := os.Stat(finalPath); err == nil {
+			existing[mf.Type] = finalPath
+		} else {
+			toDownload = append(toDownload, mf)
+		}
+	}
+	return
+}
+
 func buildMediaFileList(game *scraper.Game, romFilename string) []downloader.MediaFile {
 	var mediaFiles []downloader.MediaFile
 	preferredRegions := []string{"us", "wor", "eu", "jp"}
