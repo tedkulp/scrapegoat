@@ -393,11 +393,25 @@ func runScraper(cmd *cobra.Command, args []string) {
 		romName := strings.TrimSuffix(rom.Filename, filepath.Ext(rom.Filename))
 
 		// Download media files
-		mediaFiles := buildMediaFileList(game, rom.Filename)
-		logVerbose("  Downloading %d media files...", len(mediaFiles))
+		allMediaFiles := buildMediaFileList(game, rom.Filename)
 
 		downloadedFiles := make(map[string]string)
 		mediaAPICallCount := 0
+		existingCount := 0
+
+		// Determine which files need downloading vs already present in final location
+		mediaFiles := allMediaFiles
+		if !forceRedownload {
+			var alreadyExisting map[string]string
+			alreadyExisting, mediaFiles = filterExistingMediaFiles(allMediaFiles, mediaRootDir)
+			for mType, path := range alreadyExisting {
+				downloadedFiles[mType] = path
+				existingCount++
+			}
+		}
+
+		logVerbose("  Downloading %d media files (%d already exist)...", len(mediaFiles), existingCount)
+
 		if len(mediaFiles) > 0 {
 			results := dl.Download(mediaFiles)
 			cachedCount := 0
@@ -414,12 +428,10 @@ func runScraper(cmd *cobra.Command, args []string) {
 					logVerbose("    Cached: %s", result.MediaFile.Type)
 				} else {
 					downloadedCount++
-					mediaAPICallCount++ // Each non-cached media download counts as an API call
+					mediaAPICallCount++
 					logVerbose("    Downloaded: %s", result.MediaFile.Type)
 				}
 
-				// Copy to final media directory, organized by type
-				// mediaRootDir/{type}/{filename} e.g., /media/wheel/Game.png
 				typeDir := filepath.Join(mediaRootDir, result.MediaFile.Type)
 				finalPath := filepath.Join(typeDir, result.MediaFile.Filename)
 				if err := dl.CopyToFinal(result.LocalPath, finalPath); err != nil {
@@ -430,14 +442,22 @@ func runScraper(cmd *cobra.Command, args []string) {
 				downloadedFiles[result.MediaFile.Type] = finalPath
 			}
 
-			// Summary of media operations
-			if cachedCount > 0 && downloadedCount > 0 {
-				logInfo("  Media: %d downloaded, %d from cache", downloadedCount, cachedCount)
-			} else if cachedCount > 0 {
-				logInfo("  Media: %d from cache", cachedCount)
-			} else if downloadedCount > 0 {
-				logInfo("  Media: %d downloaded", downloadedCount)
+			// Build media summary showing only non-zero counts
+			var parts []string
+			if existingCount > 0 {
+				parts = append(parts, fmt.Sprintf("%d existing", existingCount))
 			}
+			if downloadedCount > 0 {
+				parts = append(parts, fmt.Sprintf("%d downloaded", downloadedCount))
+			}
+			if cachedCount > 0 {
+				parts = append(parts, fmt.Sprintf("%d from cache", cachedCount))
+			}
+			if len(parts) > 0 {
+				logInfo("  Media: %s", strings.Join(parts, ", "))
+			}
+		} else if existingCount > 0 {
+			logInfo("  Media: %d existing", existingCount)
 		}
 
 		// Generate artwork if enabled
