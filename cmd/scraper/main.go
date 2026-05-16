@@ -384,7 +384,9 @@ func runScraper(cmd *cobra.Command, args []string) {
 		}
 
 		if dryRun {
-			logInfo("  [DRY RUN] Would download %d media files", len(game.Medias))
+			dryRunMediaFiles := buildMediaFileList(game, rom.Filename)
+			_, dryRunToDownload := filterExistingMediaFiles(dryRunMediaFiles, mediaRootDir)
+			logInfo("  [DRY RUN] Would download %d media files (%d already exist)", len(dryRunToDownload), len(dryRunMediaFiles)-len(dryRunToDownload))
 			successCount++
 			continue
 		}
