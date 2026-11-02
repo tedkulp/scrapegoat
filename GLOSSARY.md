@@ -32,6 +32,10 @@ _Avoid_: Invalid game, skipped game
 The number of ScreenScraper requests the user account may make per day, and how many it has already used today.
 _Avoid_: Rate limit (that is the server refusing a request), allowance
 
+**Failed-request quota**:
+A separate daily allowance of ScreenScraper requests that may fail (ScreenScraper's "KO" fields, `requestskotoday` and `maxrequestskoperday`), counted apart from the main quota.
+_Avoid_: KO quota, error limit
+
 **Throttle**:
 The minimum gap Scrapegoat leaves between consecutive ScreenScraper requests, so it stays polite and inside the per-second limit.
 _Avoid_: Delay, sleep, backoff (backoff is the wait before a retry)
