@@ -13,7 +13,9 @@ import (
 )
 
 const (
-	apiBaseURL = "https://www.screenscraper.fr/api2"
+	apiBaseURL     = "https://www.screenscraper.fr/api2"
+	maxAttempts    = 3
+	rateLimitDelay = 10 * time.Second
 )
 
 // Client handles API communication with ScreenScraper
@@ -107,15 +109,46 @@ func (c *Client) GetGameInfo(systemID int, romName string, hashes *ROMHashes) (*
 
 	apiURL := fmt.Sprintf("%s/jeuInfos.php?%s", apiBaseURL, params.Encode())
 
-	// Retry logic: 3 attempts with exponential backoff
-	maxRetries := 3
+	apiResp, err := getJSONWithRetry[GameInfoJSONResponse](c, apiURL)
+	if err != nil {
+		return nil, nil, false, err
+	}
+
+	if apiResp.Response.Game == nil {
+		// Cache the "not found" result to avoid repeated API calls
+		if c.cache != nil && hashes != nil {
+			if err := c.cache.SetNotFound(hashes); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to cache 'not found' result: %v\n", err)
+			}
+		}
+		return nil, nil, false, fmt.Errorf("game not found in ScreenScraper database")
+	}
+
+	game := apiResp.Response.Game
+	userInfo := &apiResp.Response.SSUser
+
+	// Check if this is a non-game and cache appropriately
+	if c.cache != nil && hashes != nil {
+		if game.IsNonGame() {
+			if err := c.cache.SetNonGame(hashes, game); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to cache non-game data: %v\n", err)
+			}
+		} else {
+			if err := c.cache.Set(hashes, game); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to cache game data: %v\n", err)
+			}
+		}
+	}
+
+	return game, userInfo, false, nil
+}
+
+func getJSONWithRetry[T any](c *Client, apiURL string) (*T, error) {
 	var lastErr error
 
-	for attempt := 0; attempt < maxRetries; attempt++ {
+	for attempt := 0; attempt < maxAttempts; attempt++ {
 		if attempt > 0 {
-			// Exponential backoff between attempts: 2s, 4s
-			backoff := time.Duration(1<<uint(attempt)) * time.Second
-			c.sleep(backoff)
+			c.sleep(time.Duration(1<<uint(attempt)) * time.Second)
 		}
 
 		resp, err := c.httpClient.Get(apiURL)
@@ -124,7 +157,6 @@ func (c *Client) GetGameInfo(systemID int, romName string, hashes *ROMHashes) (*
 			continue
 		}
 
-		// Read body for potential reuse in error messages
 		body, readErr := io.ReadAll(resp.Body)
 		resp.Body.Close()
 
@@ -133,10 +165,11 @@ func (c *Client) GetGameInfo(systemID int, romName string, hashes *ROMHashes) (*
 			continue
 		}
 
-		// Handle rate limiting with longer backoff
-		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == 429 {
+		if resp.StatusCode == http.StatusTooManyRequests {
 			lastErr = fmt.Errorf("rate limited by API")
-			c.sleep(10 * time.Second)
+			if attempt < maxAttempts-1 {
+				c.sleep(rateLimitDelay)
+			}
 			continue
 		}
 
@@ -145,42 +178,16 @@ func (c *Client) GetGameInfo(systemID int, romName string, hashes *ROMHashes) (*
 			continue
 		}
 
-		var apiResp GameInfoJSONResponse
-		if err := json.Unmarshal(body, &apiResp); err != nil {
+		var v T
+		if err := json.Unmarshal(body, &v); err != nil {
 			lastErr = fmt.Errorf("failed to decode API response: %w", err)
 			continue
 		}
 
-		if apiResp.Response.Game == nil {
-			// Cache the "not found" result to avoid repeated API calls
-			if c.cache != nil && hashes != nil {
-				if err := c.cache.SetNotFound(hashes); err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: failed to cache 'not found' result: %v\n", err)
-				}
-			}
-			return nil, nil, false, fmt.Errorf("game not found in ScreenScraper database")
-		}
-
-		game := apiResp.Response.Game
-		userInfo := &apiResp.Response.SSUser
-
-		// Check if this is a non-game and cache appropriately
-		if c.cache != nil && hashes != nil {
-			if game.IsNonGame() {
-				if err := c.cache.SetNonGame(hashes, game); err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: failed to cache non-game data: %v\n", err)
-				}
-			} else {
-				if err := c.cache.Set(hashes, game); err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: failed to cache game data: %v\n", err)
-				}
-			}
-		}
-
-		return game, userInfo, false, nil
+		return &v, nil
 	}
 
-	return nil, nil, false, fmt.Errorf("failed after %d attempts: %w", maxRetries, lastErr)
+	return nil, fmt.Errorf("failed after %d attempts: %w", maxAttempts, lastErr)
 }
 
 // DownloadMedia downloads a media file from the given URL
@@ -223,89 +230,47 @@ func (c *Client) GetSystemsList() ([]System, error) {
 
 	apiURL := fmt.Sprintf("%s/systemesListe.php?%s", apiBaseURL, params.Encode())
 
-	// Retry logic: 3 attempts with exponential backoff
-	maxRetries := 3
-	var lastErr error
-
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		if attempt > 0 {
-			// Exponential backoff between attempts: 2s, 4s
-			backoff := time.Duration(1<<uint(attempt)) * time.Second
-			c.sleep(backoff)
-		}
-
-		resp, err := c.httpClient.Get(apiURL)
-		if err != nil {
-			lastErr = fmt.Errorf("API request failed: %w", err)
-			continue
-		}
-
-		// Read body for potential reuse in error messages
-		body, readErr := io.ReadAll(resp.Body)
-		resp.Body.Close()
-
-		if readErr != nil {
-			lastErr = fmt.Errorf("failed to read response: %w", readErr)
-			continue
-		}
-
-		// Handle rate limiting with longer backoff
-		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == 429 {
-			lastErr = fmt.Errorf("rate limited by API")
-			c.sleep(10 * time.Second)
-			continue
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			lastErr = fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
-			continue
-		}
-
-		var apiResp SystemsListJSONResponse
-		if err := json.Unmarshal(body, &apiResp); err != nil {
-			lastErr = fmt.Errorf("failed to decode API response: %w", err)
-			continue
-		}
-
-		// Convert SystemJSON to System
-		systems := make([]System, 0, len(apiResp.Response.Systems))
-		for _, sysJSON := range apiResp.Response.Systems {
-			sys := System{
-				ID: sysJSON.ID,
-			}
-
-			// Build names list from JSON fields
-			if sysJSON.Names.US != "" {
-				sys.Names = append(sys.Names, Name{Region: "us", Text: sysJSON.Names.US})
-			}
-			if sysJSON.Names.EU != "" {
-				sys.Names = append(sys.Names, Name{Region: "eu", Text: sysJSON.Names.EU})
-			}
-			// Use Common as world region
-			if sysJSON.Names.Common != "" {
-				sys.Names = append(sys.Names, Name{Region: "wor", Text: sysJSON.Names.Common})
-			}
-
-			// Parse extensions from comma-separated string
-			if sysJSON.Extensions != "" {
-				for _, ext := range strings.Split(sysJSON.Extensions, ",") {
-					ext = strings.TrimSpace(ext)
-					if ext != "" {
-						if !strings.HasPrefix(ext, ".") {
-							ext = "." + ext
-						}
-						sys.Extensions = append(sys.Extensions, ext)
-					}
-				}
-			}
-
-			systems = append(systems, sys)
-		}
-
-		return systems, nil
+	apiResp, err := getJSONWithRetry[SystemsListJSONResponse](c, apiURL)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, fmt.Errorf("failed after %d attempts: %w", maxRetries, lastErr)
+	// Convert SystemJSON to System
+	systems := make([]System, 0, len(apiResp.Response.Systems))
+	for _, sysJSON := range apiResp.Response.Systems {
+		sys := System{
+			ID: sysJSON.ID,
+		}
+
+		// Build names list from JSON fields
+		if sysJSON.Names.US != "" {
+			sys.Names = append(sys.Names, Name{Region: "us", Text: sysJSON.Names.US})
+		}
+		if sysJSON.Names.EU != "" {
+			sys.Names = append(sys.Names, Name{Region: "eu", Text: sysJSON.Names.EU})
+		}
+		// Use Common as world region
+		if sysJSON.Names.Common != "" {
+			sys.Names = append(sys.Names, Name{Region: "wor", Text: sysJSON.Names.Common})
+		}
+
+		// Parse extensions from comma-separated string
+		if sysJSON.Extensions != "" {
+			for _, ext := range strings.Split(sysJSON.Extensions, ",") {
+				ext = strings.TrimSpace(ext)
+				if ext != "" {
+					if !strings.HasPrefix(ext, ".") {
+						ext = "." + ext
+					}
+					sys.Extensions = append(sys.Extensions, ext)
+				}
+			}
+		}
+
+		systems = append(systems, sys)
+	}
+
+	return systems, nil
 }
 
 // GetUserInfo fetches user account information and API quota details
