@@ -93,3 +93,17 @@ Generates EmulationStation-compatible output:
 - `media/` directory - Downloaded images and videos with naming pattern `{rom-name}-{type}.{ext}`
 
 Media types downloaded: box-2D (box art), screenshot-title (screenshot), wheel (logo), video.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues on tedkulp/scrapegoat (via `gh`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
