@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-Get up and running with Scrapegoat in 5 minutes!
+Get up and running with Scrapegoat in 5 minutes.
 
 ## 1. Get ScreenScraper Credentials
 
@@ -8,7 +8,17 @@ Get up and running with Scrapegoat in 5 minutes!
 2. Note your username and password
 3. Contact ScreenScraper support or check their forums for developer credentials (devid and devpassword)
 
-## 2. Configure Scrapegoat
+## 2. Get Scrapegoat
+
+Download the archive for your OS from [GitHub Releases](https://github.com/tedkulp/scrapegoat/releases) and extract `scrapegoat`, or build it from source:
+
+```bash
+git clone https://github.com/tedkulp/scrapegoat.git
+cd scrapegoat
+make build
+```
+
+## 3. Configure Scrapegoat
 
 ```bash
 # Copy example config
@@ -27,35 +37,45 @@ screenscraper:
   user_password: "YOUR_PASSWORD"
 ```
 
-## 3. Run Your First Scrape
+Check that the credentials work:
 
 ```bash
-# Dry run to test (doesn't download anything)
-./scrapegoat --platform nes --rom-dir ~/roms/nes --dry-run
-
-# Real scrape
-./scrapegoat --platform nes --rom-dir ~/roms/nes --verbose
+./scrapegoat user-info
 ```
 
-## 4. Results
+## 4. Run Your First Scrape
 
-After scraping, you'll have:
+```bash
+# Dry run to test (doesn't download or write anything)
+./scrapegoat scrape --platform nes --rom-dir ~/roms/nes --dry-run
+
+# Real scrape
+./scrapegoat scrape --platform nes --rom-dir ~/roms/nes --verbose
+```
+
+> [!WARNING]
+> At the end of a run, Scrapegoat lists the ROMs it could not match and **asks whether to delete them**. Add `--auto-delete=false` to keep them without being asked.
+
+## 5. Results
+
+After scraping, your ROM directory contains:
 - `gamelist.xml` - Game metadata for EmulationStation
-- `media/` - Downloaded images and videos
+- Media subdirectories such as `box2dfront/`, `screenshots/`, `wheel/` and `videos/`, one file per ROM
+
+Use `--gamelist-dir` and `--media-root-dir` to write these somewhere else.
 
 ## Common Platforms
 
-Platform codes you can use with `--platform`:
+Platform slugs you can use with `--platform`:
 
 - `nes` - Nintendo Entertainment System
 - `snes` - Super Nintendo
-- `genesis` - Sega Genesis
+- `genesis` - Sega Genesis / Mega Drive
 - `n64` - Nintendo 64
-- `ps1` - PlayStation 1
-- `gba` - Game Boy Advance
-- `arcade` - Arcade
+- `psx` - PlayStation
+- `gb` / `gbc` / `gba` - Game Boy, Game Boy Color, Game Boy Advance
 
-Add more platforms to `config.yaml` as needed!
+Platforms are fetched from ScreenScraper automatically. Run `./scrapegoat list-platforms` to see every slug.
 
 ## Tips
 
@@ -67,20 +87,20 @@ Add more platforms to `config.yaml` as needed!
 ## Next Steps
 
 - Read the full [README.md](README.md) for all options
-- Add more platforms to your config
 - Configure EmulationStation to use your gamelist.xml
+- Try custom artwork generation: [ARTWORK.md](ARTWORK.md)
 
 ## Troubleshooting
 
 **Error: "screenscraper.dev_id is required"**
 - Make sure you've edited `config.yaml` with your credentials
+- Scrapegoat looks for `./config.yaml`, then `~/.config/scrapegoat/config.yaml`; use `--config` to point elsewhere
 
-**Error: "platform X not found"**
-- Check that the platform name matches your `config.yaml`
-- Platform names are case-sensitive
+**Error: "platform X not found in configuration or API"**
+- Check the slug with `./scrapegoat list-platforms`
 
 **No games found**
-- Verify ROM file extensions match those in `config.yaml`
+- Run `./scrapegoat list-platforms` and check that your ROM file extensions are listed for the platform
 - Check that your ROM directory path is correct
 
 For more help, see the [README.md](README.md) troubleshooting section.

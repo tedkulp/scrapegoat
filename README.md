@@ -1,62 +1,77 @@
 # Scrapegoat
 
-A fast, efficient ROM scraper for EmulationStation that uses the ScreenScraper.fr API to gather game metadata and media files.
+A ROM scraper for EmulationStation. It identifies your ROMs by hash against the [ScreenScraper.fr](https://www.screenscraper.fr/) database, downloads box art, screenshots, logos and videos, and writes a `gamelist.xml`.
 
 ## Features
 
-- **Accurate matching** - Uses CRC32, MD5, and SHA1 hashes to precisely identify ROM files
-- **ZIP file support** - Automatically extracts and hashes ROM files from ZIP archives
-- **Concurrent downloads** - Downloads multiple media files in parallel for faster processing
-- **Smart caching** - Caches both game metadata and media files to minimize API usage
-- **EmulationStation compatible** - Generates `gamelist.xml` in the correct format
-- **Rate limit handling** - Built-in retry logic and exponential backoff for API reliability
-- **Platform support** - Works with any platform supported by ScreenScraper.fr
-- **Real-time quota tracking** - Shows actual API usage directly from ScreenScraper
-- **Dry-run mode** - Test scraping without downloading files or making changes
-- **Debug mode** - Detailed logging of all API calls for troubleshooting
+- **Accurate matching**: identifies ROMs by CRC32, MD5 and SHA1 hashes, with the filename as a fallback
+- **ZIP support**: hashes the ROM inside a ZIP archive, not the archive itself
+- **Concurrent downloads**: fetches media files in parallel with a configurable worker pool
+- **Caching**: caches game lookups and media files, so re-runs use far less API quota
+- **Any platform**: platform IDs and extensions are fetched from ScreenScraper automatically
+- **Quota-aware**: shows your remaining daily API quota from ScreenScraper's own responses
+- **Artwork generation**: optionally composes custom images (miximages) from downloaded media; see [ARTWORK.md](ARTWORK.md)
+- **Dry-run mode**: queries the API without downloading or writing anything
+
+## Quick start
+
+1. Download the archive for your OS from [GitHub Releases](https://github.com/tedkulp/scrapegoat/releases) and extract `scrapegoat`.
+2. Create a config file with your ScreenScraper credentials (see [Configuration](#configuration)):
+   ```bash
+   cp config.yaml.example config.yaml
+   ```
+3. Try a dry run:
+   ```bash
+   ./scrapegoat scrape --platform nes --rom-dir ~/roms/nes --dry-run
+   ```
+4. Scrape for real:
+   ```bash
+   ./scrapegoat scrape --platform nes --rom-dir ~/roms/nes
+   ```
+
+> [!WARNING]
+> At the end of a run, `scrape` lists the ROMs it could not match (not found, marked non-game, or failed) and **asks whether to delete them**. Pass `--auto-delete=false` to always keep them without a prompt.
 
 ## Prerequisites
 
-1. **ScreenScraper.fr Account**
-   - Register at https://www.screenscraper.fr/
-   - Developer credentials are required for API access
-
-2. **Go 1.21 or later**
-   - Required for building from source
+- A [ScreenScraper.fr](https://www.screenscraper.fr/) account (user credentials)
+- ScreenScraper developer credentials (`dev_id` and `dev_password`)
+- Go 1.23 or later, only if you build from source
 
 ## Installation
+
+### Prebuilt binaries
+
+Releases include archives for Linux, macOS and Windows (x86_64 and arm64): https://github.com/tedkulp/scrapegoat/releases
 
 ### Build from source
 
 ```bash
 git clone https://github.com/tedkulp/scrapegoat.git
 cd scrapegoat
-go build -o scrapegoat cmd/scraper/main.go
+make build    # same as: go build -o scrapegoat cmd/scraper/main.go
 ```
 
-### Using Make
+Run `make help` to see all targets (`test`, `lint`, `install`, ...).
 
-```bash
-make build    # Build the binary
-make install  # Install to /usr/local/bin
-make help     # Show all available targets
-```
-
-### Install with go install
+### go install
 
 ```bash
 go install github.com/tedkulp/scrapegoat/cmd/scraper@latest
 ```
 
+> [!NOTE]
+> `go install` (and `make install`) put the binary in `$GOPATH/bin` under the name **`scraper`**, taken from the package directory. Rename it to `scrapegoat` if you want the commands below to match.
+
 ## Configuration
 
-1. Copy the example configuration file:
+Scrapegoat reads `./config.yaml` first, then `~/.config/scrapegoat/config.yaml`. Pass `--config <path>` to use another file.
 
 ```bash
 cp config.yaml.example config.yaml
 ```
 
-2. Edit `config.yaml` and add your ScreenScraper.fr credentials:
+Fill in your credentials:
 
 ```yaml
 screenscraper:
@@ -64,69 +79,66 @@ screenscraper:
   dev_password: "YOUR_DEV_PASSWORD"
   user_id: "YOUR_USERNAME"
   user_password: "YOUR_PASSWORD"
-  software_name: "scrapegoat"
+  software_name: "scrapegoat/1.0"
 ```
 
-3. The configuration includes platform definitions. System IDs can be found at:
-   https://www.screenscraper.fr/systemelist.php
+`config.yaml.example` also documents the optional `output`, `platforms` and `artwork` sections.
 
 ## Usage
 
-Scrapegoat provides three main commands:
-
-### 1. Scrape ROMs
-
-Scrape ROM files and generate gamelist.xml:
+### Scrape ROMs
 
 ```bash
 scrapegoat scrape --platform <platform> --rom-dir <path>
 ```
 
-**Flags:**
-```
-  -p, --platform string        Platform/system name (required)
-  -r, --rom-dir string         ROM directory path (required)
-  -o, --gamelist-dir string    Directory for gamelist.xml output (default: same as rom-dir)
-  -m, --media-root-dir string  Root directory for media files (default: same as rom-dir)
-      --cache-dir string       Cache directory for downloaded media (default: ~/.scrapegoat)
-  -w, --workers int            Number of concurrent download workers (default: 4)
-      --dry-run                Scan and query API but don't download or write files
-  -v, --verbose                Verbose output with debug logging
-      --config string          Config file (default: ./config.yaml or ~/.config/scrapegoat/config.yaml)
-```
+| Flag | Default | Description |
+|---|---|---|
+| `-p, --platform` | (required) | Platform slug, e.g. `nes`. See `list-platforms`. |
+| `-r, --rom-dir` | (required) | ROM directory |
+| `-o, --gamelist-dir` | rom-dir | Where `gamelist.xml` is written |
+| `-m, --media-root-dir` | rom-dir | Root directory for media subdirectories |
+| `--cache-dir` | `~/.scrapegoat` | Cache for game lookups and media |
+| `-w, --workers` | `4` | Concurrent media download workers |
+| `--cache-hours` | `12` | Hours before cached platforms and game lookups expire |
+| `--force-redownload` | off | Re-download media files that already exist in the destination |
+| `--artwork` | from config | `true` or `false` to override `artwork.enabled` |
+| `--auto-delete` | prompt | `true` deletes unmatched ROMs without asking, `false` keeps them |
+| `--dry-run` | off | Query the API but download and write nothing |
+| `-v, --verbose` | off | Log every API request (passwords masked), cache hit and download |
+| `--config` | see above | Config file path |
 
-**Examples:**
+`--rom-dir`, `--gamelist-dir`, `--media-root-dir` and `--cache-dir` accept a `{platform}` placeholder, which is replaced by the `--platform` value:
 
 ```bash
-# Scrape NES ROMs with default settings
-scrapegoat scrape --platform nes --rom-dir ~/roms/nes
-
-# Scrape with verbose output to see all API calls
-scrapegoat scrape --platform snes --rom-dir ~/roms/snes --verbose
-
-# Dry run to preview what would be scraped
-scrapegoat scrape --platform gba --rom-dir ~/roms/gba --dry-run
-
-# Use more workers for faster downloads
-scrapegoat scrape --platform ps1 --rom-dir ~/roms/ps1 --workers 8
-
-# Custom output directories
-scrapegoat scrape --platform n64 --rom-dir ~/roms/n64 \
-  --gamelist-dir ~/emulationstation/n64 \
-  --media-root-dir ~/emulationstation/n64/media
+for p in nes snes gba; do
+  scrapegoat scrape --platform "$p" --rom-dir "$HOME/roms/{platform}" --auto-delete=false
+done
 ```
 
-### 2. List Available Platforms
+More examples:
 
-Fetch and display all platforms from ScreenScraper:
+```bash
+# Verbose output to see every API call
+scrapegoat scrape --platform snes --rom-dir ~/roms/snes --verbose
+
+# More download workers
+scrapegoat scrape --platform psx --rom-dir ~/roms/psx --workers 8
+
+# Separate output directories
+scrapegoat scrape --platform n64 --rom-dir ~/roms/n64 \
+  --gamelist-dir ~/.emulationstation/gamelists/n64 \
+  --media-root-dir ~/.emulationstation/downloaded_media/n64
+```
+
+### List platforms
 
 ```bash
 scrapegoat list-platforms
 ```
 
-This shows all available platforms with their IDs, slugs, names, and supported file extensions. Results are cached for 12 hours.
+Prints every ScreenScraper platform with its ID, slug, name and file extensions. Results are cached for 12 hours.
 
-**Example output:**
 ```
 ID    Slug                      Platform Name                  Extensions
 ----- ------------------------- ------------------------------ ----------
@@ -135,90 +147,73 @@ ID    Slug                      Platform Name                  Extensions
 11    virtualboy                Nintendo virtualboy            .vb, .vboy, .bin
 ```
 
-### 3. Check User Account Info
-
-Display your ScreenScraper account information and API quota:
+### Check account and quota
 
 ```bash
 scrapegoat user-info
 ```
 
-**Example output:**
 ```
 === Account Information ===
 User ID: youruser
 Level: 1
 Contribution: 10
 ROMs Associated: 0
+Uploads: 0
 
 === API Quota ===
 Requests Today: 1234
-Max Requests Per Day: 100000
-Max Threads: 2
+Max Requests Per Day: 20000
+Max Requests Per Minute: 1024
+Failed Requests Today: 12 / 2000
+Max Threads: 1
 
-Remaining Requests Today: 98766
+Remaining Requests Today: 18766
+```
+
+### Show version
+
+```bash
+scrapegoat version
 ```
 
 ## Output
 
-Scrapegoat creates the following structure:
-
 ```
-<rom-dir>/
-├── gamelist.xml              # EmulationStation game metadata
-├── Game1.zip                 # Your ROM files
-├── Game2.zip
-└── <media-type>/             # Media files organized by type
-    ├── wheel/
-    │   ├── Game1.png         # Logo/wheel art
-    │   └── Game2.png
-    ├── box2dfront/
-    │   ├── Game1.png         # Box art
-    │   └── Game2.png
-    ├── screenshots/
-    │   ├── Game1.png         # Screenshots
-    │   └── Game2.png
-    ├── titlescreens/
-    │   ├── Game1.png         # Title screens
-    │   └── Game2.png
-    └── videos/
-        ├── Game1.mp4         # Gameplay videos
-        └── Game2.mp4
+<media-root-dir>/            # defaults to rom-dir
+├── 3dboxes/Game1.png
+├── backcovers/Game1.png
+├── box2dfront/Game1.png
+├── manuals/Game1.pdf
+├── physicalmedia/Game1.png
+├── screenshots/Game1.png
+├── titlescreens/Game1.png
+├── videos/Game1.mp4
+└── wheel/Game1.png
+<gamelist-dir>/gamelist.xml  # defaults to rom-dir
 ```
 
-**Note:** EmulationStation finds media files automatically by filename convention. Media tags are not included in gamelist.xml as EmulationStation knows where to look for them.
+Each media file is named after its ROM without the extension. A type is skipped when ScreenScraper has no media for it. Media regions are preferred in the order us, wor, eu, jp.
+
+`gamelist.xml` holds names, descriptions, ratings, release dates, developers, publishers, genres and player counts. It has no media tags: EmulationStation finds media by directory and filename.
+
+Media files that already exist in the destination are not downloaded again unless you pass `--force-redownload`.
 
 ## Caching
 
-Scrapegoat uses smart caching to minimize API usage:
+All caches live under `--cache-dir` (default `~/.scrapegoat`):
 
-- **Game metadata**: Cached for 12 hours in `~/.scrapegoat/games/`
-- **Media files**: Cached permanently in `~/.scrapegoat/cache/<platform>/`
-- **Platform list**: Cached for 12 hours
+| What | Where | Expires |
+|---|---|---|
+| Platform list | `platforms.json` | after `--cache-hours` (12) |
+| Game lookups, including "not found" | `games/` | after `--cache-hours` (12) |
+| Media files | `<platform>/<media-type>/` | never |
 
-Cache is organized by MD5 hash for efficient lookups. Cached items don't count against your API quota.
+Cache hits make no API request and do not count against your quota. Delete the directory to start fresh: `rm -rf ~/.scrapegoat/`.
 
-## Media Types
+## Platforms
 
-Scrapegoat downloads the following media types (when available):
-
-- **wheel** - Logo/wheel art for game selection menus
-- **box2dfront** - 2D box/cover art
-- **screenshots** - In-game screenshots
-- **titlescreens** - Title screen images
-- **videos** - Gameplay video clips
-- **3dboxes** - 3D box renders
-- **backcovers** - Back cover art
-- **manuals** - Game manuals (PDF)
-
-Media files are organized in subdirectories matching EmulationStation's conventions.
-
-## Platform Configuration
-
-The `config.yaml` file includes many common platforms. To add a new platform:
-
-1. Find the system ID at https://www.screenscraper.fr/systemelist.php
-2. Add it to your config file:
+Platforms come from the ScreenScraper API, so you usually don't need to configure any. To override one or work offline, define it in `config.yaml` (IDs are listed at https://www.screenscraper.fr/systemelist.php):
 
 ```yaml
 platforms:
@@ -231,66 +226,44 @@ platforms:
       - ".chd"
 ```
 
-Or use `scrapegoat list-platforms` to see all available platforms with their correct IDs and extensions.
+Entries in `config.yaml` take priority over the cache and the API.
 
-## Tips
+## API limits
 
-- **API Rate Limits**: ScreenScraper enforces rate limits. The tool includes a 1-second delay between ROM queries and handles rate limiting automatically with retry logic.
-
-- **Free vs Premium**: Free accounts have daily limits (typically 20,000-30,000 requests). Premium accounts have higher limits. Use `scrapegoat user-info` to check your quota.
-
-- **Hash Accuracy**: The tool computes CRC32, MD5, and SHA1 hashes for the most accurate matching. This may take a few seconds per ROM but ensures correct identification.
-
-- **ZIP Files**: When ROMs are compressed in ZIP archives, the tool automatically extracts and hashes the ROM file inside (not the ZIP container). This ensures accurate matching against ScreenScraper's database.
-
-- **Cache Benefits**: On subsequent runs, cached ROMs skip API calls entirely. Media files are also cached, so you won't re-download files you already have.
-
-- **Debug Mode**: Use `--verbose` to see detailed logs of all API calls, cache hits, redirects, and quota updates. Helpful for troubleshooting API usage.
-
-- **API Call Accounting**: Each media file download through ScreenScraper's API endpoints may count as 2-3 API calls internally. The tool tracks actual usage from the API's response data.
+- Scrapegoat waits at least 1 second between HTTP requests to ScreenScraper.
+- Transient failures (network errors, timeouts, 429, 5xx, an overloaded server) are retried up to 3 times with 2 s and 4 s backoff, plus 10 s after a 429.
+- Permanent failures stop immediately with the reason, e.g. bad developer credentials (403), API closed (423) or daily quota exceeded (430).
+- Media downloads go through ScreenScraper too and count against your quota. Check it with `scrapegoat user-info`.
 
 ## Troubleshooting
 
-**"game not found in ScreenScraper database"**
-- The ROM might not be in the database
-- Try a different ROM dump or version
-- Some homebrew/unofficial games may not be available
-- Verify the platform ID is correct using `scrapegoat list-platforms`
+**`game not found in ScreenScraper database`**
+- The dump may not be in ScreenScraper's database; try another dump or version.
+- Check the platform with `scrapegoat list-platforms`.
+- The "not found" result is cached for `--cache-hours`. Lower that value to retry sooner.
 
-**"rate limited by API"**
-- Check your quota with `scrapegoat user-info`
-- Wait for your quota to reset (usually resets daily)
-- Reduce the number of workers with `--workers 2`
-- Consider upgrading to a premium ScreenScraper account
+**`rate limited by API` or a quota error**
+- Check your quota with `scrapegoat user-info`. Quotas reset daily.
+- Lower `--workers`, since media downloads also use quota.
 
-**"failed to hash ROM"**
-- Check file permissions
-- Ensure the ROM file isn't corrupted
-- Verify the file extension is supported for the platform
-- For ZIP files, ensure they contain a valid ROM file
+**`Failed to hash ROM`**
+- Check file permissions and make sure the file isn't corrupted.
+- For ZIP files, make sure the archive contains a ROM.
 
 **High API usage**
-- Use `--verbose` to see exactly what API calls are being made
-- Check if you're re-scraping ROMs that are already cached
-- Each media file download counts as ~2-3 API calls on ScreenScraper's end
-- Consider scraping smaller batches if you're hitting limits
-
-**Cache issues**
-- Cache is stored in `~/.scrapegoat/`
-- Game metadata expires after 12 hours
-- Media files are cached permanently
-- Delete cache directory to force re-download: `rm -rf ~/.scrapegoat/`
-
-## License
-
-MIT License - see LICENSE file for details
-
-## Credits
-
-- Uses the excellent [ScreenScraper.fr](https://www.screenscraper.fr/) API
-- Built with [Cobra](https://github.com/spf13/cobra) and [Viper](https://github.com/spf13/viper)
-- Designed for [EmulationStation](https://github.com/RetroPie/EmulationStation)
+- Run with `--verbose` to see every request and cache hit.
+- Keep the same `--cache-dir` between runs so cached lookups and media are reused.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Pull requests are welcome. Run `make all` (fmt, vet, test, build) before submitting. Issues are tracked at https://github.com/tedkulp/scrapegoat/issues.
+
+## Credits
+
+- [ScreenScraper.fr](https://www.screenscraper.fr/) for the API and database
+- Built with [Cobra](https://github.com/spf13/cobra) and [Viper](https://github.com/spf13/viper)
+- Made for [EmulationStation](https://github.com/RetroPie/EmulationStation)
+
+## License
+
+MIT. See [LICENSE](LICENSE).
