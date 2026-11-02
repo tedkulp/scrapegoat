@@ -262,7 +262,7 @@ func (c *Client) GetUserInfo() (*UserInfo, error) {
 
 	apiResp, err := getJSONWithRetry[UserInfoJSONResponse](c, apiURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to fetch user info: %w", err)
 	}
 
 	return &apiResp.Response.SSUser, nil

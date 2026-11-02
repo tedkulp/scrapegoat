@@ -6,18 +6,18 @@ import (
 	"testing"
 )
 
-func TestGameCacheGetWithEmptyKeyIsMiss(t *testing.T) {
+func TestGameCacheGetWithShortKeyIsNotCached(t *testing.T) {
 	gc := NewGameCache(t.TempDir(), 12)
 
 	for _, md5 := range []string{"", "a"} {
 		result := gc.Get(&ROMHashes{MD5: md5})
 		if result.Found {
-			t.Errorf("MD5 %q: expected miss, got %+v", md5, result)
+			t.Errorf("MD5 %q: expected no cache entry, got %+v", md5, result)
 		}
 	}
 }
 
-func TestGameCacheWritesWithEmptyKeyFailAndWriteNothing(t *testing.T) {
+func TestGameCacheWritesWithShortKeyFailAndWriteNothing(t *testing.T) {
 	dir := t.TempDir()
 	gc := NewGameCache(dir, 12)
 	game := &Game{ID: "1"}

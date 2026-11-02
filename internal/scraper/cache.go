@@ -31,8 +31,7 @@ func (gc *GameCache) getCacheKey(hashes *ROMHashes) string {
 	return hashes.MD5
 }
 
-// getCacheFilePath returns the full path to the cache file for a ROM.
-// It fails for keys shorter than two characters, which cannot be sharded.
+// getCacheFilePath returns the full path to the cache file for a ROM
 func (gc *GameCache) getCacheFilePath(cacheKey string) (string, error) {
 	if len(cacheKey) < 2 {
 		return "", fmt.Errorf("cache key %q is too short", cacheKey)
