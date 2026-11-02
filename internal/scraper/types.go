@@ -224,6 +224,7 @@ func (g *Game) IsNonGame() bool {
 type SystemsListJSONResponse struct {
 	Response struct {
 		Systems []SystemJSON `json:"systemes"`
+		SSUser  *UserInfo    `json:"ssuser"`
 	} `json:"response"`
 }
 

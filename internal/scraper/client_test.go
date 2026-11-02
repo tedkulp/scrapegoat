@@ -514,20 +514,40 @@ func TestQuotaIsUnknownWhenNumbersDoNotParse(t *testing.T) {
 	}
 }
 
-func TestQuotaIsUpdatedByUserInfoButNotSystemsList(t *testing.T) {
+func TestQuotaIsUpdatedByUserInfoAndSystemsList(t *testing.T) {
 	body := `{"response":{"ssuser":{"requeststoday":"10","maxrequestsperday":"100"}}}`
 	h := newHarness(t, func(int) *http.Response { return respond(http.StatusOK, body) })
 
 	if _, err := h.client.GetUserInfo(); err != nil {
 		t.Fatal(err)
 	}
+	if q := h.client.Quota(); !q.Known || q.RequestsToday != 10 || q.Remaining() != 90 {
+		t.Errorf("expected quota from user info (10/100), got %+v", q)
+	}
+
 	body = `{"response":{"systemes":[],"ssuser":{"requeststoday":"50","maxrequestsperday":"100"}}}`
 	if _, err := h.client.GetSystemsList(); err != nil {
 		t.Fatal(err)
 	}
+	if q := h.client.Quota(); !q.Known || q.RequestsToday != 50 || q.Remaining() != 50 {
+		t.Errorf("expected quota from systems list (50/100), got %+v", q)
+	}
+}
 
-	if q := h.client.Quota(); !q.Known || q.RequestsToday != 10 || q.Remaining() != 90 {
-		t.Errorf("expected quota from user info (10/100), got %+v", q)
+func TestSystemsListWithoutSSUserLeavesQuotaUnchanged(t *testing.T) {
+	body := `{"response":{"ssuser":{"requeststoday":"10","maxrequestsperday":"100"}}}`
+	h := newHarness(t, func(int) *http.Response { return respond(http.StatusOK, body) })
+
+	if _, err := h.client.GetUserInfo(); err != nil {
+		t.Fatal(err)
+	}
+	body = `{"response":{"systemes":[]}}`
+	if _, err := h.client.GetSystemsList(); err != nil {
+		t.Fatal(err)
+	}
+
+	if q := h.client.Quota(); !q.Known || q.RequestsToday != 10 {
+		t.Errorf("expected quota unchanged (10/100), got %+v", q)
 	}
 }
 

@@ -394,6 +394,10 @@ func (c *Client) GetSystemsList() ([]System, error) {
 		return nil, fmt.Errorf("failed to fetch systems list: %w", err)
 	}
 
+	if apiResp.Response.SSUser != nil {
+		c.setQuota(apiResp.Response.SSUser)
+	}
+
 	// Convert SystemJSON to System
 	systems := make([]System, 0, len(apiResp.Response.Systems))
 	for _, sysJSON := range apiResp.Response.Systems {
