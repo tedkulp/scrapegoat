@@ -4,6 +4,24 @@ Scrapegoat identifies ROM files against the ScreenScraper database and turns wha
 
 ## Language
 
+### Scraping a ROM
+
+**Scrape**:
+The whole job of turning one ROM into EmulationStation metadata and media: hashing it, looking it up, placing its media and composing its artwork.
+_Avoid_: Process, lookup (a lookup is one step of a scrape)
+
+**Scrape outcome**:
+What a scrape produces: scraped, not found, or non-game. A scrape that could not hash or look up the ROM is a failure, not an outcome.
+_Avoid_: Status, result type
+
+**Scraped**:
+A scrape outcome where the ROM matched a game and its media and artwork were placed (or, in a dry run, planned).
+_Avoid_: Success, done
+
+**Unmatched ROM**:
+A ROM whose scrape ended as not found, non-game or a failure. Unmatched ROMs are what Scrapegoat offers to delete at the end of a run.
+_Avoid_: Failed ROM (not found and non-game ROMs did not fail), bad ROM
+
 ### Looking up a ROM
 
 **Lookup**:
