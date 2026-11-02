@@ -61,7 +61,7 @@ Add more platforms to `config.yaml` as needed!
 
 1. **Start small**: Test with a few ROMs first
 2. **Use --dry-run**: Always test before downloading
-3. **Be patient**: API calls are rate-limited (1 second delay between ROMs)
+3. **Be patient**: Requests are throttled (at least 1 second between requests; cached lookups skip the wait)
 4. **Check logs**: Use `--verbose` to see what's happening
 
 ## Next Steps

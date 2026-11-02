@@ -119,6 +119,17 @@ func Load(configPath string) (*Config, error) {
 	return &config, nil
 }
 
+// Credentials returns the ScreenScraper credentials from the configuration.
+func (s ScreenScraperConfig) Credentials() scraper.Credentials {
+	return scraper.Credentials{
+		DevID:        s.DevID,
+		DevPassword:  s.DevPassword,
+		UserID:       s.UserID,
+		UserPassword: s.UserPassword,
+		SoftwareName: s.SoftwareName,
+	}
+}
+
 // SetCacheExpiration sets the cache expiration time in hours for both platforms and ROM metadata
 func (c *Config) SetCacheExpiration(hours int) {
 	c.cacheExpHours = hours
@@ -187,13 +198,7 @@ func (c *Config) loadPlatformsFromAPI() error {
 	}
 
 	// Cache is expired or doesn't exist, fetch from API
-	client := scraper.NewClient(
-		c.ScreenScraper.DevID,
-		c.ScreenScraper.DevPassword,
-		c.ScreenScraper.UserID,
-		c.ScreenScraper.UserPassword,
-		c.ScreenScraper.SoftwareName,
-	)
+	client := scraper.NewClient(c.ScreenScraper.Credentials())
 
 	systems, err := client.GetSystemsList()
 	if err != nil {

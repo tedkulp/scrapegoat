@@ -9,149 +9,294 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
 const (
-	apiBaseURL     = "https://www.screenscraper.fr/api2"
-	maxAttempts    = 3
-	rateLimitDelay = 10 * time.Second
+	apiBaseURL      = "https://www.screenscraper.fr/api2"
+	maxAttempts     = 3
+	rateLimitDelay  = 10 * time.Second
+	defaultThrottle = time.Second
 )
+
+// Credentials identify both the developer and the user to ScreenScraper.
+type Credentials struct {
+	DevID        string
+	DevPassword  string
+	UserID       string
+	UserPassword string
+	SoftwareName string
+}
+
+func (cr Credentials) params() url.Values {
+	params := url.Values{}
+	params.Set("devid", cr.DevID)
+	params.Set("devpassword", cr.DevPassword)
+	params.Set("ssid", cr.UserID)
+	params.Set("sspassword", cr.UserPassword)
+	params.Set("softname", cr.SoftwareName)
+	params.Set("output", "json")
+	return params
+}
+
+// Clock is the time source the client uses for retry backoff, throttling and
+// cache expiry.
+type Clock interface {
+	Now() time.Time
+	Sleep(time.Duration)
+}
+
+type systemClock struct{}
+
+func (systemClock) Now() time.Time        { return time.Now() }
+func (systemClock) Sleep(d time.Duration) { time.Sleep(d) }
+
+// Option configures a Client.
+type Option func(*Client)
+
+// WithHTTPClient sets the HTTP client used to reach ScreenScraper.
+func WithHTTPClient(hc *http.Client) Option {
+	return func(c *Client) { c.httpClient = hc }
+}
+
+// WithClock sets the clock used for retry backoff, throttling and cache expiry.
+func WithClock(clock Clock) Option {
+	return func(c *Client) { c.clock = clock }
+}
+
+// WithCache enables the on-disk cache of lookup answers.
+func WithCache(dir string, expirationHours int) Option {
+	return func(c *Client) {
+		c.cacheDir = dir
+		c.cacheHours = expirationHours
+		c.cacheEnabled = true
+	}
+}
+
+// WithThrottle sets the minimum gap between consecutive ScreenScraper requests.
+func WithThrottle(gap time.Duration) Option {
+	return func(c *Client) { c.throttle = gap }
+}
+
+// WithDebug enables debug logging of lookups and request URLs.
+func WithDebug(debug bool) Option {
+	return func(c *Client) { c.debug = debug }
+}
+
+// WithDebugOutput sets where debug logging is written (stderr by default).
+func WithDebugOutput(w io.Writer) Option {
+	return func(c *Client) { c.debugOut = w }
+}
 
 // Client handles API communication with ScreenScraper
 type Client struct {
-	httpClient   *http.Client
-	devID        string
-	devPassword  string
-	userID       string
-	userPassword string
-	softwareName string
+	httpClient *http.Client
+	creds      Credentials
+	clock      Clock
+	debug      bool
+	debugOut   io.Writer
+	throttle   time.Duration
+
+	mu          sync.Mutex
+	lastRequest time.Time
+	requests    int
+	quota       Quota
+
+	cacheEnabled bool
+	cacheDir     string
+	cacheHours   int
 	cache        *GameCache
-	debug        bool
-	sleep        func(time.Duration)
 }
 
 // NewClient creates a new ScreenScraper API client
-func NewClient(devID, devPassword, userID, userPassword, softwareName string) *Client {
-	return &Client{
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-		devID:        devID,
-		devPassword:  devPassword,
-		userID:       userID,
-		userPassword: userPassword,
-		softwareName: softwareName,
-		cache:        nil, // Cache is optional
-		debug:        false,
-		sleep:        time.Sleep,
+func NewClient(creds Credentials, opts ...Option) *Client {
+	c := &Client{
+		httpClient: &http.Client{Timeout: 30 * time.Second},
+		creds:      creds,
+		clock:      systemClock{},
+		throttle:   defaultThrottle,
+		debugOut:   os.Stderr,
+	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	if c.cacheEnabled {
+		c.cache = NewGameCache(c.cacheDir, c.cacheHours, c.clock.Now)
+	}
+	return c
+}
+
+// Outcome is the answer a lookup produced: a match, not found, or non-game.
+type Outcome int
+
+const (
+	// OutcomeMatch means ScreenScraper identified the ROM as a game.
+	OutcomeMatch Outcome = iota
+	// OutcomeNotFound means ScreenScraper has no entry for the ROM.
+	OutcomeNotFound
+	// OutcomeNonGame means ScreenScraper identified the ROM as something other than a game.
+	OutcomeNonGame
+)
+
+// String returns the glossary name of the outcome.
+func (o Outcome) String() string {
+	switch o {
+	case OutcomeMatch:
+		return "match"
+	case OutcomeNotFound:
+		return "not found"
+	case OutcomeNonGame:
+		return "non-game"
+	}
+	return fmt.Sprintf("Outcome(%d)", int(o))
+}
+
+// LookupResult is the outcome of a lookup. Game is set for OutcomeMatch and
+// OutcomeNonGame. Cached reports whether the answer came from the local cache.
+type LookupResult struct {
+	Outcome Outcome
+	Game    *Game
+	Cached  bool
+}
+
+func outcomeFor(game *Game) Outcome {
+	switch {
+	case game == nil:
+		return OutcomeNotFound
+	case game.IsNonGame():
+		return OutcomeNonGame
+	default:
+		return OutcomeMatch
 	}
 }
 
-// SetDebug enables debug logging
-func (c *Client) SetDebug(debug bool) {
-	c.debug = debug
-}
-
-// SetCache sets the cache for the client
-func (c *Client) SetCache(cacheDir string, expirationHours int) {
-	c.cache = NewGameCache(cacheDir, expirationHours)
-}
-
-// GetGameInfo fetches game information from ScreenScraper API with retry logic
-// If cache is enabled, checks cache first before making API call
-// Returns: game, userInfo, cached (true if from cache), error
-func (c *Client) GetGameInfo(systemID int, romName string, hashes *ROMHashes) (*Game, *UserInfo, bool, error) {
-	// Check cache first if enabled
+// Lookup asks ScreenScraper (or the local cache of its earlier answers) which
+// game a ROM is. Not found and non-game are outcomes, not errors; an error
+// means no answer could be obtained.
+func (c *Client) Lookup(systemID int, romName string, hashes *ROMHashes) (LookupResult, error) {
 	if c.cache != nil && hashes != nil {
-		result := c.cache.Get(hashes)
-		if result.Found {
-			if c.debug {
-				if result.NotFound {
-					fmt.Fprintf(os.Stderr, "[DEBUG] API: GetGameInfo - CACHED (not found)\n")
-				} else if result.IsNonGame {
-					fmt.Fprintf(os.Stderr, "[DEBUG] API: GetGameInfo - CACHED (non-game)\n")
-				} else {
-					fmt.Fprintf(os.Stderr, "[DEBUG] API: GetGameInfo - CACHED (game found)\n")
-				}
+		cached := c.cache.Get(hashes)
+		if cached.Found {
+			result := LookupResult{Game: cached.Game, Cached: true}
+			switch {
+			case cached.NotFound:
+				result.Outcome = OutcomeNotFound
+			case cached.IsNonGame:
+				result.Outcome = OutcomeNonGame
+			default:
+				result.Outcome = outcomeFor(cached.Game)
 			}
-			// Return cached result even if it's a negative result (not found or non-game)
-			// Caller will need to check if Game is nil
-			return result.Game, nil, true, nil
+			c.debugf("Lookup - CACHED (%s)", result.Outcome)
+			return result, nil
 		}
 	}
 
-	if c.debug {
-		fmt.Fprintf(os.Stderr, "[DEBUG] API: GetGameInfo - CALLING API\n")
-	}
-
-	params := url.Values{}
-	params.Set("devid", c.devID)
-	params.Set("devpassword", c.devPassword)
-	params.Set("ssid", c.userID)
-	params.Set("sspassword", c.userPassword)
-	params.Set("softname", c.softwareName)
-	params.Set("output", "json")
+	params := c.creds.params()
 	params.Set("systemeid", fmt.Sprintf("%d", systemID))
-
-	// Always include hashes if available - they are the primary lookup method
 	if hashes != nil {
 		params.Set("crc", hashes.CRC32)
 		params.Set("md5", hashes.MD5)
 		params.Set("sha1", hashes.SHA1)
 		params.Set("romtaille", fmt.Sprintf("%d", hashes.Size))
 	}
+	params.Set("romnom", filepath.Base(romName))
 
-	// romnom is optional but can help with matching
-	// For ZIP files, only include if we want filename-based matching as fallback
-	baseName := filepath.Base(romName)
-	params.Set("romnom", baseName)
-
-	apiURL := fmt.Sprintf("%s/jeuInfos.php?%s", apiBaseURL, params.Encode())
-
-	apiResp, err := getJSONWithRetry[GameInfoJSONResponse](c, apiURL)
+	apiResp, err := getJSONWithRetry[GameInfoJSONResponse](c, "jeuInfos.php", params)
 	if err != nil {
-		return nil, nil, false, err
+		return LookupResult{}, err
 	}
 
-	if apiResp.Response.Game == nil {
-		// Cache the "not found" result to avoid repeated API calls
-		if c.cache != nil && hashes != nil {
-			if err := c.cache.SetNotFound(hashes); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to cache 'not found' result: %v\n", err)
-			}
-		}
-		return nil, nil, false, fmt.Errorf("game not found in ScreenScraper database")
+	if apiResp.Response.SSUser != nil {
+		c.setQuota(apiResp.Response.SSUser)
 	}
 
 	game := apiResp.Response.Game
-	userInfo := &apiResp.Response.SSUser
+	result := LookupResult{Outcome: outcomeFor(game), Game: game}
 
-	// Check if this is a non-game and cache appropriately
 	if c.cache != nil && hashes != nil {
-		if game.IsNonGame() {
-			if err := c.cache.SetNonGame(hashes, game); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to cache non-game data: %v\n", err)
-			}
-		} else {
-			if err := c.cache.Set(hashes, game); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to cache game data: %v\n", err)
-			}
+		var cacheErr error
+		switch result.Outcome {
+		case OutcomeNotFound:
+			cacheErr = c.cache.SetNotFound(hashes)
+		case OutcomeNonGame:
+			cacheErr = c.cache.SetNonGame(hashes, game)
+		default:
+			cacheErr = c.cache.Set(hashes, game)
+		}
+		if cacheErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to cache %s result: %v\n", result.Outcome, cacheErr)
 		}
 	}
 
-	return game, userInfo, false, nil
+	return result, nil
 }
 
-func getJSONWithRetry[T any](c *Client, apiURL string) (*T, error) {
+// Quota returns the quota reported by the most recent ScreenScraper response
+// that carried one.
+func (c *Client) Quota() Quota {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.quota
+}
+
+// RequestCount returns the number of HTTP requests this client has sent to
+// ScreenScraper, retries included.
+func (c *Client) RequestCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.requests
+}
+
+func (c *Client) setQuota(u *UserInfo) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.quota = quotaFrom(u)
+}
+
+func (c *Client) debugf(format string, args ...any) {
+	if c.debug {
+		fmt.Fprintf(c.debugOut, "[DEBUG] API: "+format+"\n", args...)
+	}
+}
+
+func (c *Client) get(apiURL string) (*http.Response, error) {
+	c.mu.Lock()
+	if !c.lastRequest.IsZero() {
+		if wait := c.throttle - c.clock.Now().Sub(c.lastRequest); wait > 0 {
+			c.clock.Sleep(wait)
+		}
+	}
+	c.lastRequest = c.clock.Now()
+	c.requests++
+	c.mu.Unlock()
+
+	return c.httpClient.Get(apiURL)
+}
+
+func redactedURL(endpoint string, params url.Values) string {
+	redacted := url.Values{}
+	for k, v := range params {
+		redacted[k] = v
+	}
+	redacted.Set("devpassword", "***")
+	redacted.Set("sspassword", "***")
+	query := strings.ReplaceAll(redacted.Encode(), "%2A%2A%2A", "***")
+	return fmt.Sprintf("%s/%s?%s", apiBaseURL, endpoint, query)
+}
+
+func getJSONWithRetry[T any](c *Client, endpoint string, params url.Values) (*T, error) {
+	apiURL := fmt.Sprintf("%s/%s?%s", apiBaseURL, endpoint, params.Encode())
+	logURL := redactedURL(endpoint, params)
 	var lastErr error
 
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		if attempt > 0 {
-			c.sleep(time.Duration(1<<uint(attempt)) * time.Second)
+			c.clock.Sleep(time.Duration(1<<uint(attempt)) * time.Second)
 		}
 
-		resp, err := c.httpClient.Get(apiURL)
+		c.debugf("GET %s (attempt %d/%d)", logURL, attempt+1, maxAttempts)
+		resp, err := c.get(apiURL)
 		if err != nil {
 			lastErr = fmt.Errorf("API request failed: %w", err)
 			continue
@@ -168,7 +313,7 @@ func getJSONWithRetry[T any](c *Client, apiURL string) (*T, error) {
 		if resp.StatusCode == http.StatusTooManyRequests {
 			lastErr = fmt.Errorf("rate limited by API")
 			if attempt < maxAttempts-1 {
-				c.sleep(rateLimitDelay)
+				c.clock.Sleep(rateLimitDelay)
 			}
 			continue
 		}
@@ -192,17 +337,7 @@ func getJSONWithRetry[T any](c *Client, apiURL string) (*T, error) {
 
 // GetSystemsList fetches the list of all systems/platforms from ScreenScraper
 func (c *Client) GetSystemsList() ([]System, error) {
-	params := url.Values{}
-	params.Set("devid", c.devID)
-	params.Set("devpassword", c.devPassword)
-	params.Set("ssid", c.userID)
-	params.Set("sspassword", c.userPassword)
-	params.Set("softname", c.softwareName)
-	params.Set("output", "json")
-
-	apiURL := fmt.Sprintf("%s/systemesListe.php?%s", apiBaseURL, params.Encode())
-
-	apiResp, err := getJSONWithRetry[SystemsListJSONResponse](c, apiURL)
+	apiResp, err := getJSONWithRetry[SystemsListJSONResponse](c, "systemesListe.php", c.creds.params())
 	if err != nil {
 		return nil, err
 	}
@@ -247,48 +382,14 @@ func (c *Client) GetSystemsList() ([]System, error) {
 
 // GetUserInfo fetches user account information and API quota details
 func (c *Client) GetUserInfo() (*UserInfo, error) {
-	if c.debug {
-		fmt.Fprintf(os.Stderr, "[DEBUG] API: GetUserInfo - CALLING API\n")
-	}
-	params := url.Values{}
-	params.Set("devid", c.devID)
-	params.Set("devpassword", c.devPassword)
-	params.Set("ssid", c.userID)
-	params.Set("sspassword", c.userPassword)
-	params.Set("softname", c.softwareName)
-	params.Set("output", "json")
-
-	apiURL := fmt.Sprintf("%s/ssuserInfos.php?%s", apiBaseURL, params.Encode())
-
-	apiResp, err := getJSONWithRetry[UserInfoJSONResponse](c, apiURL)
+	apiResp, err := getJSONWithRetry[UserInfoJSONResponse](c, "ssuserInfos.php", c.creds.params())
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch user info: %w", err)
 	}
 
-	return &apiResp.Response.SSUser, nil
-}
-
-// GetDebugURL returns the actual API URL that will be called (for debugging)
-// WARNING: Contains sensitive credentials - use carefully
-func (c *Client) GetDebugURL(systemID int, romName string, hashes *ROMHashes) string {
-	params := url.Values{}
-	params.Set("devid", c.devID)
-	params.Set("devpassword", c.devPassword)
-	params.Set("ssid", c.userID)
-	params.Set("sspassword", c.userPassword)
-	params.Set("softname", c.softwareName)
-	params.Set("output", "json")
-	params.Set("systemeid", fmt.Sprintf("%d", systemID))
-
-	if hashes != nil {
-		params.Set("crc", hashes.CRC32)
-		params.Set("md5", hashes.MD5)
-		params.Set("sha1", hashes.SHA1)
-		params.Set("romtaille", fmt.Sprintf("%d", hashes.Size))
+	if apiResp.Response.SSUser == nil {
+		return &UserInfo{}, nil
 	}
-
-	baseName := filepath.Base(romName)
-	params.Set("romnom", baseName)
-
-	return fmt.Sprintf("%s/jeuInfos.php?%s", apiBaseURL, params.Encode())
+	c.setQuota(apiResp.Response.SSUser)
+	return apiResp.Response.SSUser, nil
 }

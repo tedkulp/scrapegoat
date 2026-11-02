@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/gosimple/slug"
 	"github.com/spf13/cobra"
@@ -125,13 +124,7 @@ func runListPlatforms(cmd *cobra.Command, args []string) {
 	logInfo("Fetching platforms from ScreenScraper.fr...")
 
 	// Create scraper client
-	client := scraper.NewClient(
-		cfg.ScreenScraper.DevID,
-		cfg.ScreenScraper.DevPassword,
-		cfg.ScreenScraper.UserID,
-		cfg.ScreenScraper.UserPassword,
-		cfg.ScreenScraper.SoftwareName,
-	)
+	client := scraper.NewClient(cfg.ScreenScraper.Credentials())
 
 	// Fetch systems list
 	systems, err := client.GetSystemsList()
@@ -286,19 +279,10 @@ func runScraper(cmd *cobra.Command, args []string) {
 	}
 
 	// Step 2: Initialize scraper client
-	scraperClient := scraper.NewClient(
-		cfg.ScreenScraper.DevID,
-		cfg.ScreenScraper.DevPassword,
-		cfg.ScreenScraper.UserID,
-		cfg.ScreenScraper.UserPassword,
-		cfg.ScreenScraper.SoftwareName,
+	scraperClient := scraper.NewClient(cfg.ScreenScraper.Credentials(),
+		scraper.WithCache(cacheDir, cfg.GetCacheExpiration()),
+		scraper.WithDebug(verbose),
 	)
-
-	// Enable caching with configured expiration time
-	scraperClient.SetCache(cacheDir, cfg.GetCacheExpiration())
-
-	// Enable debug mode if verbose
-	scraperClient.SetDebug(verbose)
 
 	// Step 3: Initialize downloader
 	var dl *downloader.Downloader
@@ -327,8 +311,6 @@ func runScraper(cmd *cobra.Command, args []string) {
 	logInfo("\nProcessing ROM files...")
 	successCount := 0
 	errorCount := 0
-	var userInfo *scraper.UserInfo
-	var initialRequests int
 	var failedROMs []scanner.ROMFile // Track ROMs that failed to process
 
 	for i, rom := range roms {
@@ -347,11 +329,7 @@ func runScraper(cmd *cobra.Command, args []string) {
 
 		// Query ScreenScraper API (or get from cache)
 		logVerbose("  Querying ScreenScraper API...")
-		if verbose {
-			debugURL := scraperClient.GetDebugURL(platform.ID, rom.Filename, hashes)
-			logVerbose("  API URL: %s", debugURL)
-		}
-		game, freshUserInfo, cached, err := lookupGame(scraperClient, platform.ID, rom.Filename, hashes)
+		result, err := scraperClient.Lookup(platform.ID, rom.Filename, hashes)
 		if err != nil {
 			logError("  Failed to get game info: %v", err)
 			errorCount++
@@ -359,24 +337,26 @@ func runScraper(cmd *cobra.Command, args []string) {
 			continue
 		}
 
-		// Update userInfo if we got fresh data from API (not cached)
-		if !cached && freshUserInfo != nil {
-			if userInfo == nil {
-				// First ROM - record initial request count
-				fmt.Sscanf(freshUserInfo.RequestsToday, "%d", &initialRequests)
+		if result.Outcome == scraper.OutcomeNotFound {
+			if result.Cached {
+				logError("  Failed to get game info: game not found in ScreenScraper database (cached)")
+			} else {
+				logError("  Failed to get game info: game not found in ScreenScraper database")
 			}
-			userInfo = freshUserInfo
+			errorCount++
+			failedROMs = append(failedROMs, rom)
+			continue
 		}
 
+		game := result.Game
 		gameName := game.GetPreferredName([]string{"us", "wor", "eu", "jp"})
-		if cached {
+		if result.Cached {
 			logInfo("  Found: %s (cached)", gameName)
 		} else {
 			logInfo("  Found: %s", gameName)
 		}
 
-		// Check if this is marked as a non-game by ScreenScraper
-		if game.IsNonGame() {
+		if result.Outcome == scraper.OutcomeNonGame {
 			logInfo("  Skipping: Marked as non-game by ScreenScraper")
 			errorCount++
 			failedROMs = append(failedROMs, rom)
@@ -495,17 +475,9 @@ func runScraper(cmd *cobra.Command, args []string) {
 
 		successCount++
 
-		// Display real-time API quota if available
-		if userInfo != nil {
-			var requestsToday, maxRequests int
-			fmt.Sscanf(userInfo.RequestsToday, "%d", &requestsToday)
-			fmt.Sscanf(userInfo.MaxRequestsPerDay, "%d", &maxRequests)
-			remaining := maxRequests - requestsToday
-			logInfo("  API Quota: %d requests remaining today", remaining)
+		if quota := scraperClient.Quota(); quota.Known {
+			logInfo("  API Quota: %d requests remaining today", quota.Remaining())
 		}
-
-		// Be nice to the API - add a small delay between requests
-		time.Sleep(1 * time.Second)
 	}
 
 	// Step 6: Write gamelist.xml
@@ -580,11 +552,7 @@ func runScraper(cmd *cobra.Command, args []string) {
 	logInfo("Failed: %d", errorCount)
 
 	// API call statistics
-	if userInfo != nil && !dryRun {
-		var finalRequests int
-		fmt.Sscanf(userInfo.RequestsToday, "%d", &finalRequests)
-		totalAPICalls := finalRequests - initialRequests
-
+	if totalAPICalls := scraperClient.RequestCount(); totalAPICalls > 0 && !dryRun {
 		logInfo("\n=== API Call Statistics ===")
 		logInfo("Total API calls: %d", totalAPICalls)
 		if successCount > 0 {
@@ -606,17 +574,6 @@ func runScraper(cmd *cobra.Command, args []string) {
 		logInfo("Cache directory: %s/games", cacheDir)
 		logInfo("%s", cacheDurationMessage(cfg.GetCacheExpiration()))
 	}
-}
-
-func lookupGame(client *scraper.Client, systemID int, romName string, hashes *scraper.ROMHashes) (*scraper.Game, *scraper.UserInfo, bool, error) {
-	game, userInfo, cached, err := client.GetGameInfo(systemID, romName, hashes)
-	if err != nil {
-		return nil, nil, cached, err
-	}
-	if game == nil {
-		return nil, nil, cached, fmt.Errorf("game not found in ScreenScraper database (cached)")
-	}
-	return game, userInfo, cached, nil
 }
 
 func cacheDurationMessage(hours int) string {
@@ -728,13 +685,7 @@ func runUserInfo(cmd *cobra.Command, args []string) {
 	logInfo("Fetching user information from ScreenScraper.fr...")
 
 	// Create scraper client
-	client := scraper.NewClient(
-		cfg.ScreenScraper.DevID,
-		cfg.ScreenScraper.DevPassword,
-		cfg.ScreenScraper.UserID,
-		cfg.ScreenScraper.UserPassword,
-		cfg.ScreenScraper.SoftwareName,
-	)
+	client := scraper.NewClient(cfg.ScreenScraper.Credentials())
 
 	// Fetch user info
 	userInfo, err := client.GetUserInfo()
@@ -755,12 +706,7 @@ func runUserInfo(cmd *cobra.Command, args []string) {
 		logInfo("%s", line)
 	}
 
-	// Calculate remaining requests
-	if userInfo.RequestsToday != "" && userInfo.MaxRequestsPerDay != "" {
-		var requestsToday, maxRequests int
-		fmt.Sscanf(userInfo.RequestsToday, "%d", &requestsToday)
-		fmt.Sscanf(userInfo.MaxRequestsPerDay, "%d", &maxRequests)
-		remaining := maxRequests - requestsToday
-		logInfo("\nRemaining Requests Today: %d", remaining)
+	if quota := client.Quota(); quota.Known {
+		logInfo("\nRemaining Requests Today: %d", quota.Remaining())
 	}
 }

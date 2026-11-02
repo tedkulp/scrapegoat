@@ -4,10 +4,11 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestGameCacheGetWithShortKeyIsNotCached(t *testing.T) {
-	gc := NewGameCache(t.TempDir(), 12)
+	gc := NewGameCache(t.TempDir(), 12, time.Now)
 
 	for _, md5 := range []string{"", "a"} {
 		result := gc.Get(&ROMHashes{MD5: md5})
@@ -19,7 +20,7 @@ func TestGameCacheGetWithShortKeyIsNotCached(t *testing.T) {
 
 func TestGameCacheWritesWithShortKeyFailAndWriteNothing(t *testing.T) {
 	dir := t.TempDir()
-	gc := NewGameCache(dir, 12)
+	gc := NewGameCache(dir, 12, time.Now)
 	game := &Game{ID: "1"}
 
 	writes := map[string]func(*ROMHashes) error{
@@ -55,7 +56,7 @@ func TestGameCacheWritesWithShortKeyFailAndWriteNothing(t *testing.T) {
 }
 
 func TestGameCacheRoundTrip(t *testing.T) {
-	gc := NewGameCache(t.TempDir(), 12)
+	gc := NewGameCache(t.TempDir(), 12, time.Now)
 	hashes := &ROMHashes{MD5: "abcdef0123456789"}
 
 	if err := gc.Set(hashes, &Game{ID: "42"}); err != nil {

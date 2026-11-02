@@ -50,7 +50,7 @@ The main scraping workflow follows these steps:
 
 1. **Scan** - `scanner.Scanner` walks the ROM directory to find files matching platform extensions
 2. **Hash** - `scraper.HashROMFile()` computes CRC32, MD5, SHA1 for each ROM. For ZIP files, extracts and hashes the ROM inside (not the ZIP container).
-3. **Query API** - `scraper.Client.GetGameInfo()` queries ScreenScraper with hashes and system ID. Includes retry logic with exponential backoff for rate limiting.
+3. **Lookup** - `scraper.Client.Lookup()` asks ScreenScraper (or the local cache) which game a ROM is, by hashes and system ID. It returns a `LookupResult` whose `Outcome` is `OutcomeMatch`, `OutcomeNotFound` or `OutcomeNonGame`; an `error` means no answer could be obtained. Retry, backoff, throttling and quota tracking live inside the client.
 4. **Download Media** - `downloader.Downloader` downloads media files (box art, screenshots, wheel, video) concurrently using worker pool
 5. **Generate Metadata** - `metadata.Generator` builds gamelist.xml with relative paths compatible with EmulationStation
 6. **Write Output** - Writes gamelist.xml and copies media files to final location
@@ -63,7 +63,9 @@ The main scraping workflow follows these steps:
 
 **Concurrent Downloads** (`internal/downloader/downloader.go:50-84`): Uses a worker pool pattern with channels. Jobs are sent to workers via a channel, results collected via another channel. The number of workers is configurable via `--workers` flag.
 
-**API Retry Logic** (`internal/scraper/client.go`, `getJSONWithRetry`, used by `GetGameInfo`, `GetSystemsList` and `GetUserInfo`): The ScreenScraper client makes up to 3 attempts per request, with exponential backoff between attempts (2s, then 4s). A rate limit response (429) also triggers a 10-second delay, skipped on the final attempt. Transport errors, body-read errors, non-200 statuses and JSON decode errors are retried; a decoded "game not found" response is not.
+**API Retry Logic** (`internal/scraper/client.go`, `getJSONWithRetry`, used by `Lookup`, `GetSystemsList` and `GetUserInfo`): The ScreenScraper client makes up to 3 attempts per request, with exponential backoff between attempts (2s, then 4s). A rate limit response (429) also triggers a 10-second delay, skipped on the final attempt. Transport errors, body-read errors, non-200 statuses and JSON decode errors are retried; a decoded "game not found" response is not (it is the `OutcomeNotFound` outcome).
+
+**Lookup Client Construction** (`internal/scraper/client.go`): `NewClient(creds Credentials, opts ...Option)`. Options: `WithHTTPClient`, `WithClock` (one injectable clock for backoff, throttle and cache expiry), `WithCache`, `WithThrottle`, `WithDebug`, `WithDebugOutput`. `Client.Quota()` returns the numeric quota from the latest `ssuser` response; `Client.RequestCount()` counts real HTTP requests, retries included. Debug logging prints each request URL with `devpassword` and `sspassword` replaced by `***`.
 
 **Relative Path Generation** (`internal/metadata/gamelist.go:45-109`): Media file paths in gamelist.xml are stored relative to the ROM directory with "./" prefix, as required by EmulationStation.
 
@@ -78,7 +80,7 @@ The main scraping workflow follows these steps:
 ## API Considerations
 
 **ScreenScraper Rate Limits**: The API enforces rate limits. The scraper includes:
-- 1 second delay between ROM queries (cmd/scraper/main.go:200)
+- A 1 second throttle between consecutive HTTP requests, enforced inside the client (`WithThrottle`); cache hits make no request and do not wait
 - Retry logic with exponential backoff
 - 10-second delay on rate limit responses
 
