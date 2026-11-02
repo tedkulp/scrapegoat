@@ -236,7 +236,7 @@ type UserInfoJSONResponse struct {
 // UserInfo represents user account information and API quota details
 type UserInfo struct {
 	ID                   string `json:"id"`
-	NumeroID             string `json:"numeroid"`
+	NumeroID             string `json:"numid"`
 	Level                string `json:"niveau"`
 	Contribution         string `json:"contribution"`
 	Uploads              string `json:"uploadsysteme"`
@@ -248,18 +248,19 @@ type UserInfo struct {
 	MaxThreads           string `json:"maxthreads"`
 	RequestsToday        string `json:"requeststoday"`
 	MaxRequestsPerDay    string `json:"maxrequestsperday"`
-	MaxRequestsPerHour   string `json:"maxrequestskohour"`
-	MaxRequestsPerMinute string `json:"maxrequestsperminute"`
-	MaxRequestsPerSecond string `json:"maxrequestspersecondes"`
-	VisitorIP            string `json:"visitorip"`
+	MaxRequestsPerMinute string `json:"maxrequestspermin"`
+	// Failed-request quota: ScreenScraper's separate daily allowance of
+	// requests that may fail ("KO"), counted apart from the main quota.
+	RequestsKOToday     string `json:"requestskotoday"`
+	MaxRequestsKOPerDay string `json:"maxrequestskoperday"`
 }
 
 // GameCacheEntry represents a cached game info entry
 type GameCacheEntry struct {
-	FetchedAt  time.Time `json:"fetched_at"`
-	Game       *Game     `json:"game"`
-	NotFound   bool      `json:"not_found"`   // True if ROM was not found in API
-	IsNonGame  bool      `json:"is_non_game"` // True if ROM is marked as non-game
+	FetchedAt time.Time `json:"fetched_at"`
+	Game      *Game     `json:"game"`
+	NotFound  bool      `json:"not_found"`   // True if ROM was not found in API
+	IsNonGame bool      `json:"is_non_game"` // True if ROM is marked as non-game
 }
 
 // IsExpired checks if the cache entry is older than the specified duration
