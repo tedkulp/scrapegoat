@@ -203,16 +203,12 @@ func (c *Client) Lookup(systemID int, romName string, hashes *ROMHashes) (Lookup
 	}
 	params.Set("romnom", filepath.Base(romName))
 
-	// jeuInfos.php answers an unknown ROM with 404 ("Rom/Iso/Dossier non
-	// trouvée"), which is the not-found outcome rather than a failure.
 	var game *Game
 	apiResp, err := getJSONWithRetry[GameInfoJSONResponse](c, "jeuInfos.php", params)
-	var se *StatusError
-	switch {
-	case errors.As(err, &se) && se.StatusCode == http.StatusNotFound:
-	case err != nil:
+	if err != nil && !isNotFound(err) {
 		return LookupResult{}, err
-	default:
+	}
+	if err == nil {
 		if apiResp.Response.SSUser != nil {
 			c.setQuota(apiResp.Response.SSUser)
 		}
@@ -299,18 +295,17 @@ type StatusError struct {
 	Body       string
 }
 
-// Status meanings come from ScreenScraper's API v2 documentation
-// (https://www.screenscraper.fr/webapi2.php, error code table).
 var permanentStatusCauses = map[int]string{
 	400: "ScreenScraper rejected the request as malformed",
 	403: "ScreenScraper rejected developer credentials",
-	404: "ScreenScraper found no match",
+	404: "ScreenScraper has no entry for the request",
 	423: "ScreenScraper API is closed",
 	426: "ScreenScraper has blacklisted this software name; update Scrapegoat",
 	430: "ScreenScraper daily quota exceeded",
 	431: "ScreenScraper failed-request quota exceeded (too many unrecognized ROMs today)",
 }
 
+// Error names the cause of the status, with the start of the response body.
 func (e *StatusError) Error() string {
 	cause, ok := permanentStatusCauses[e.StatusCode]
 	if !ok {
@@ -326,13 +321,13 @@ func (e *StatusError) Error() string {
 	return msg
 }
 
-// isTransientStatus reports whether a non-200 status may clear up on its own:
-// 401 (API closed to non-members because the server is overloaded), 429
-// (thread limit reached) and any 5xx. Every other status is permanent.
 func isTransientStatus(status int) bool {
-	return status == http.StatusUnauthorized ||
-		status == http.StatusTooManyRequests ||
-		status >= 500
+	return status == http.StatusUnauthorized || status >= 500
+}
+
+func isNotFound(err error) bool {
+	var se *StatusError
+	return errors.As(err, &se) && se.StatusCode == http.StatusNotFound
 }
 
 func getJSONWithRetry[T any](c *Client, endpoint string, params url.Values) (*T, error) {
