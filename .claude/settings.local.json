@@ -14,7 +14,16 @@
       "Bash(make:*)",
       "Bash(go run:*)",
       "WebFetch(domain:www.screenscraper.fr)",
-      "Read(//home/ted/**)"
+      "Read(//home/ted/**)",
+      "Skill(superpowers:subagent-driven-development)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(go test *)",
+      "Bash(git -C /home/ted/src/scrapegoat add cmd/scraper/main.go cmd/scraper/main_test.go)",
+      "Bash(git -C /home/ted/src/scrapegoat commit -m ' *)",
+      "Bash(grep -v \"^--$\")",
+      "Bash(gofmt *)",
+      "Bash(go vet *)"
     ],
     "deny": [],
     "ask": []
