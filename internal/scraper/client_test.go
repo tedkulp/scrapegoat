@@ -9,7 +9,6 @@ import (
 	"time"
 )
 
-// roundTripFunc stubs the HTTP boundary so no real API calls are made.
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
@@ -22,8 +21,6 @@ func respond(status int, body string) *http.Response {
 	}
 }
 
-// newTestClient returns a client whose HTTP calls go to handler and whose
-// backoff sleeps are recorded instead of slept.
 func newTestClient(handler func(attempt int) *http.Response) (*Client, *int, *[]time.Duration) {
 	calls := 0
 	var sleeps []time.Duration

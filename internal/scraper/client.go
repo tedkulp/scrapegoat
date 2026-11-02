@@ -26,7 +26,7 @@ type Client struct {
 	softwareName string
 	cache        *GameCache
 	debug        bool
-	sleep        func(time.Duration) // backoff sleeper; overridable in tests
+	sleep        func(time.Duration)
 }
 
 // NewClient creates a new ScreenScraper API client

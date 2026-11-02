@@ -619,7 +619,6 @@ func lookupGame(client *scraper.Client, systemID int, romName string, hashes *sc
 	return game, userInfo, cached, nil
 }
 
-// cacheDurationMessage describes how long game data stays cached.
 func cacheDurationMessage(hours int) string {
 	unit := "hours"
 	if hours == 1 {
