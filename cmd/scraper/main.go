@@ -664,7 +664,6 @@ func expandPathTemplate(path string, platformName string) string {
 	return path
 }
 
-// quotaLines formats the quota and failed-request quota lines shown by user-info.
 func quotaLines(userInfo *scraper.UserInfo) []string {
 	return []string{
 		fmt.Sprintf("Requests Today: %s", userInfo.RequestsToday),

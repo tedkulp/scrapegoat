@@ -250,10 +250,8 @@ type UserInfo struct {
 	RequestsToday        string `json:"requeststoday"`
 	MaxRequestsPerDay    string `json:"maxrequestsperday"`
 	MaxRequestsPerMinute string `json:"maxrequestspermin"`
-	// Failed-request quota: ScreenScraper's separate daily allowance of
-	// requests that may fail ("KO"), counted apart from the main quota.
-	RequestsKOToday     string `json:"requestskotoday"`
-	MaxRequestsKOPerDay string `json:"maxrequestskoperday"`
+	RequestsKOToday      string `json:"requestskotoday"`
+	MaxRequestsKOPerDay  string `json:"maxrequestskoperday"`
 }
 
 // Quota is the user account's daily allowance of ScreenScraper requests and
@@ -271,9 +269,9 @@ func (q Quota) Remaining() int {
 }
 
 func quotaFrom(u *UserInfo) Quota {
-	today, err1 := strconv.Atoi(strings.TrimSpace(u.RequestsToday))
-	limit, err2 := strconv.Atoi(strings.TrimSpace(u.MaxRequestsPerDay))
-	if err1 != nil || err2 != nil {
+	today, todayErr := strconv.Atoi(strings.TrimSpace(u.RequestsToday))
+	limit, limitErr := strconv.Atoi(strings.TrimSpace(u.MaxRequestsPerDay))
+	if todayErr != nil || limitErr != nil {
 		return Quota{}
 	}
 	return Quota{RequestsToday: today, MaxRequestsPerDay: limit, Known: true}

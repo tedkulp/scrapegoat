@@ -640,7 +640,7 @@ func TestPermanentStatusesAreNotRetried(t *testing.T) {
 }
 
 func TestTransientStatusesAreRetried(t *testing.T) {
-	for _, status := range []int{401, 500, 502, 503} {
+	for _, status := range []int{401, 408, 500, 502, 503} {
 		t.Run(fmt.Sprint(status), func(t *testing.T) {
 			c, calls, sleeps := newTestClient(func(int) *http.Response { return respond(status, "busy") })
 

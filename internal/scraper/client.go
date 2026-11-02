@@ -153,8 +153,8 @@ func (o Outcome) String() string {
 	return fmt.Sprintf("Outcome(%d)", int(o))
 }
 
-// LookupResult is the outcome of a lookup. Game is set for OutcomeMatch and
-// OutcomeNonGame. Cached reports whether the answer came from the local cache.
+// LookupResult holds the Outcome of a lookup, the Game (set for OutcomeMatch
+// and OutcomeNonGame), and whether the answer came from the local cache.
 type LookupResult struct {
 	Outcome Outcome
 	Game    *Game
@@ -206,7 +206,7 @@ func (c *Client) Lookup(systemID int, romName string, hashes *ROMHashes) (Lookup
 	var game *Game
 	apiResp, err := getJSONWithRetry[GameInfoJSONResponse](c, "jeuInfos.php", params)
 	if err != nil && !isNotFound(err) {
-		return LookupResult{}, err
+		return LookupResult{}, fmt.Errorf("failed to look up game: %w", err)
 	}
 	if err == nil {
 		if apiResp.Response.SSUser != nil {
@@ -263,7 +263,7 @@ func (c *Client) debugf(format string, args ...any) {
 	}
 }
 
-func (c *Client) get(apiURL string) (*http.Response, error) {
+func (c *Client) throttledGet(apiURL string) (*http.Response, error) {
 	c.mu.Lock()
 	if !c.lastRequest.IsZero() {
 		if wait := c.throttle - c.clock.Now().Sub(c.lastRequest); wait > 0 {
@@ -285,6 +285,10 @@ func redactedURL(endpoint string, params url.Values) string {
 	redacted.Set("devpassword", "***")
 	redacted.Set("sspassword", "***")
 	query := strings.ReplaceAll(redacted.Encode(), "%2A%2A%2A", "***")
+	return endpointURL(endpoint, query)
+}
+
+func endpointURL(endpoint, query string) string {
 	return fmt.Sprintf("%s/%s?%s", apiBaseURL, endpoint, query)
 }
 
@@ -322,7 +326,7 @@ func (e *StatusError) Error() string {
 }
 
 func isTransientStatus(status int) bool {
-	return status == http.StatusUnauthorized || status >= 500
+	return status == http.StatusUnauthorized || status == http.StatusRequestTimeout || status >= 500
 }
 
 func isNotFound(err error) bool {
@@ -331,7 +335,7 @@ func isNotFound(err error) bool {
 }
 
 func getJSONWithRetry[T any](c *Client, endpoint string, params url.Values) (*T, error) {
-	apiURL := fmt.Sprintf("%s/%s?%s", apiBaseURL, endpoint, params.Encode())
+	apiURL := endpointURL(endpoint, params.Encode())
 	logURL := redactedURL(endpoint, params)
 	var lastErr error
 
@@ -341,7 +345,7 @@ func getJSONWithRetry[T any](c *Client, endpoint string, params url.Values) (*T,
 		}
 
 		c.debugf("GET %s (attempt %d/%d)", logURL, attempt+1, maxAttempts)
-		resp, err := c.get(apiURL)
+		resp, err := c.throttledGet(apiURL)
 		if err != nil {
 			lastErr = fmt.Errorf("API request failed: %w", err)
 			continue
@@ -387,7 +391,7 @@ func getJSONWithRetry[T any](c *Client, endpoint string, params url.Values) (*T,
 func (c *Client) GetSystemsList() ([]System, error) {
 	apiResp, err := getJSONWithRetry[SystemsListJSONResponse](c, "systemesListe.php", c.creds.params())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to fetch systems list: %w", err)
 	}
 
 	// Convert SystemJSON to System
