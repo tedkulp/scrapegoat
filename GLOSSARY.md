@@ -79,3 +79,13 @@ _Avoid_: Media URL (the URL also carries credentials and a mirror host)
 **Media plan**:
 For one ROM, which media files are already in the media root, which come from the media cache, and which must be downloaded.
 _Avoid_: Download list
+
+### Composing artwork
+
+**Artwork**:
+An image Scrapegoat composes from a game's media, such as a screenshot framed with its box art and wheel. EmulationStation calls these miximages.
+_Avoid_: Composite, generated media (media comes from ScreenScraper; artwork is made locally)
+
+**Artwork output**:
+One kind of artwork the user defines, which produces one image per ROM, all in the same folder.
+_Avoid_: Output type, template
