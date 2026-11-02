@@ -351,7 +351,7 @@ func runScraper(cmd *cobra.Command, args []string) {
 			debugURL := scraperClient.GetDebugURL(platform.ID, rom.Filename, hashes)
 			logVerbose("  API URL: %s", debugURL)
 		}
-		game, freshUserInfo, cached, err := scraperClient.GetGameInfo(platform.ID, rom.Filename, hashes)
+		game, freshUserInfo, cached, err := lookupGame(scraperClient, platform.ID, rom.Filename, hashes)
 		if err != nil {
 			logError("  Failed to get game info: %v", err)
 			errorCount++
@@ -606,6 +606,20 @@ func runScraper(cmd *cobra.Command, args []string) {
 		logInfo("Cache directory: %s/games", cacheDir)
 		logInfo("Game data is cached for 12 hours")
 	}
+}
+
+// lookupGame queries the client for a ROM's game info and treats a nil game
+// (a cached "not found" result) as an error, so callers handle it like an
+// uncached not-found instead of dereferencing a nil *Game.
+func lookupGame(client *scraper.Client, systemID int, romName string, hashes *scraper.ROMHashes) (*scraper.Game, *scraper.UserInfo, bool, error) {
+	game, userInfo, cached, err := client.GetGameInfo(systemID, romName, hashes)
+	if err != nil {
+		return nil, nil, cached, err
+	}
+	if game == nil {
+		return nil, nil, cached, fmt.Errorf("game not found in ScreenScraper database (cached)")
+	}
+	return game, userInfo, cached, nil
 }
 
 func filterExistingMediaFiles(mediaFiles []downloader.MediaFile, mediaRootDir string) (existing map[string]string, toDownload []downloader.MediaFile) {
