@@ -63,7 +63,7 @@ The main scraping workflow follows these steps:
 
 **Concurrent Downloads** (`internal/downloader/downloader.go:50-84`): Uses a worker pool pattern with channels. Jobs are sent to workers via a channel, results collected via another channel. The number of workers is configurable via `--workers` flag.
 
-**API Retry Logic** (`internal/scraper/client.go:67-98`): The ScreenScraper client retries failed requests up to 3 times with exponential backoff (2s, 4s, 8s). Rate limit responses (429) trigger a 10-second delay before retry.
+**API Retry Logic** (`internal/scraper/client.go`, `GetGameInfo` and `GetSystemsList`): The ScreenScraper client makes up to 3 attempts per request, with exponential backoff between attempts (2s, then 4s). A rate limit response (429) also triggers a 10-second delay.
 
 **Relative Path Generation** (`internal/metadata/gamelist.go:45-109`): Media file paths in gamelist.xml are stored relative to the ROM directory with "./" prefix, as required by EmulationStation.
 

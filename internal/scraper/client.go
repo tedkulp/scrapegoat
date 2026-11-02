@@ -26,6 +26,7 @@ type Client struct {
 	softwareName string
 	cache        *GameCache
 	debug        bool
+	sleep        func(time.Duration) // backoff sleeper; overridable in tests
 }
 
 // NewClient creates a new ScreenScraper API client
@@ -41,6 +42,7 @@ func NewClient(devID, devPassword, userID, userPassword, softwareName string) *C
 		softwareName: softwareName,
 		cache:        nil, // Cache is optional
 		debug:        false,
+		sleep:        time.Sleep,
 	}
 }
 
@@ -106,14 +108,14 @@ func (c *Client) GetGameInfo(systemID int, romName string, hashes *ROMHashes) (*
 	apiURL := fmt.Sprintf("%s/jeuInfos.php?%s", apiBaseURL, params.Encode())
 
 	// Retry logic: 3 attempts with exponential backoff
-	maxRetries := 1
+	maxRetries := 3
 	var lastErr error
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if attempt > 0 {
-			// Exponential backoff: 2s, 4s, 8s
+			// Exponential backoff between attempts: 2s, 4s
 			backoff := time.Duration(1<<uint(attempt)) * time.Second
-			time.Sleep(backoff)
+			c.sleep(backoff)
 		}
 
 		resp, err := c.httpClient.Get(apiURL)
@@ -134,7 +136,7 @@ func (c *Client) GetGameInfo(systemID int, romName string, hashes *ROMHashes) (*
 		// Handle rate limiting with longer backoff
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == 429 {
 			lastErr = fmt.Errorf("rate limited by API")
-			time.Sleep(10 * time.Second)
+			c.sleep(10 * time.Second)
 			continue
 		}
 
@@ -227,9 +229,9 @@ func (c *Client) GetSystemsList() ([]System, error) {
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if attempt > 0 {
-			// Exponential backoff: 2s, 4s, 8s
+			// Exponential backoff between attempts: 2s, 4s
 			backoff := time.Duration(1<<uint(attempt)) * time.Second
-			time.Sleep(backoff)
+			c.sleep(backoff)
 		}
 
 		resp, err := c.httpClient.Get(apiURL)
@@ -250,7 +252,7 @@ func (c *Client) GetSystemsList() ([]System, error) {
 		// Handle rate limiting with longer backoff
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == 429 {
 			lastErr = fmt.Errorf("rate limited by API")
-			time.Sleep(10 * time.Second)
+			c.sleep(10 * time.Second)
 			continue
 		}
 
