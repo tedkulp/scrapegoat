@@ -3,6 +3,7 @@ package scraper
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"slices"
@@ -595,5 +596,102 @@ func TestQuotaIsUnchangedByUserInfoResponseWithoutSSUser(t *testing.T) {
 
 	if q := h.client.Quota(); !q.Known || q.RequestsToday != 10 {
 		t.Errorf("expected quota 10/100 to survive a response without ssuser, got %+v", q)
+	}
+}
+
+func TestForbiddenFailsFastNamingTheCause(t *testing.T) {
+	c, calls, sleeps := newTestClient(func(int) *http.Response {
+		return respond(http.StatusForbidden, "Erreur de login : Verifier vos identifiants developpeur !")
+	})
+
+	_, err := c.Lookup(3, "game.nes", testHashes)
+	if err == nil {
+		t.Fatal("expected an error for 403")
+	}
+	if *calls != 1 {
+		t.Errorf("expected 1 request, got %d", *calls)
+	}
+	if len(*sleeps) != 0 {
+		t.Errorf("expected no sleeps, got %v", *sleeps)
+	}
+	if !strings.Contains(err.Error(), "developer credentials (403)") {
+		t.Errorf("expected error naming the cause and status, got %v", err)
+	}
+	var se *StatusError
+	if !errors.As(err, &se) || se.StatusCode != http.StatusForbidden {
+		t.Errorf("expected *StatusError with status 403, got %#v", err)
+	}
+}
+
+func TestPermanentStatusesAreNotRetried(t *testing.T) {
+	for _, status := range []int{400, 403, 423, 426, 430, 431} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			c, calls, sleeps := newTestClient(func(int) *http.Response { return respond(status, "nope") })
+
+			_, err := c.GetUserInfo()
+			if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("(%d)", status)) {
+				t.Fatalf("expected error naming status %d, got %v", status, err)
+			}
+			if *calls != 1 || len(*sleeps) != 0 {
+				t.Errorf("expected 1 request and no sleeps, got %d requests, sleeps %v", *calls, *sleeps)
+			}
+		})
+	}
+}
+
+func TestTransientStatusesAreRetried(t *testing.T) {
+	for _, status := range []int{401, 500, 502, 503} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			c, calls, sleeps := newTestClient(func(int) *http.Response { return respond(status, "busy") })
+
+			_, err := c.GetSystemsList()
+			if err == nil || !strings.Contains(err.Error(), "failed after 3 attempts") {
+				t.Fatalf("expected failure after 3 attempts, got %v", err)
+			}
+			if *calls != 3 {
+				t.Errorf("expected 3 requests, got %d", *calls)
+			}
+			want := []time.Duration{2 * time.Second, 4 * time.Second}
+			if !slices.Equal(*sleeps, want) {
+				t.Errorf("expected backoff %v, got %v", want, *sleeps)
+			}
+		})
+	}
+}
+
+func TestLookup404IsNotFoundOutcomeAndCached(t *testing.T) {
+	h := newHarness(t, func(int) *http.Response {
+		return respond(http.StatusNotFound, "Erreur : Rom/Iso/Dossier non trouvée !")
+	}, WithCache(t.TempDir(), 24))
+
+	result, err := h.client.Lookup(3, "unknown.nes", testHashes)
+	if err != nil {
+		t.Fatalf("404 from a lookup is an outcome, not an error; got %v", err)
+	}
+	if result.Outcome != OutcomeNotFound || result.Game != nil || result.Cached {
+		t.Errorf("expected fresh not-found outcome, got %+v", result)
+	}
+	if h.calls != 1 || len(h.clock.sleeps) != 0 {
+		t.Errorf("expected 1 request and no sleeps, got %d requests, sleeps %v", h.calls, h.clock.sleeps)
+	}
+
+	again, err := h.client.Lookup(3, "unknown.nes", testHashes)
+	if err != nil || again.Outcome != OutcomeNotFound || !again.Cached {
+		t.Errorf("expected cached not-found on second lookup, got %+v, %v", again, err)
+	}
+	if h.calls != 1 {
+		t.Errorf("expected cached answer without a new request, got %d requests", h.calls)
+	}
+}
+
+func Test404OutsideLookupIsAPermanentError(t *testing.T) {
+	c, calls, _ := newTestClient(func(int) *http.Response { return respond(http.StatusNotFound, "") })
+
+	_, err := c.GetUserInfo()
+	if err == nil || !strings.Contains(err.Error(), "(404)") {
+		t.Fatalf("expected error naming 404, got %v", err)
+	}
+	if *calls != 1 {
+		t.Errorf("expected 1 request, got %d", *calls)
 	}
 }

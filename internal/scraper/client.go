@@ -2,6 +2,7 @@ package scraper
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -202,16 +203,18 @@ func (c *Client) Lookup(systemID int, romName string, hashes *ROMHashes) (Lookup
 	}
 	params.Set("romnom", filepath.Base(romName))
 
+	var game *Game
 	apiResp, err := getJSONWithRetry[GameInfoJSONResponse](c, "jeuInfos.php", params)
-	if err != nil {
+	if err != nil && !isNotFound(err) {
 		return LookupResult{}, err
 	}
-
-	if apiResp.Response.SSUser != nil {
-		c.setQuota(apiResp.Response.SSUser)
+	if err == nil {
+		if apiResp.Response.SSUser != nil {
+			c.setQuota(apiResp.Response.SSUser)
+		}
+		game = apiResp.Response.Game
 	}
 
-	game := apiResp.Response.Game
 	result := LookupResult{Outcome: outcomeFor(game), Game: game}
 
 	if c.cache != nil && hashes != nil {
@@ -285,6 +288,48 @@ func redactedURL(endpoint string, params url.Values) string {
 	return fmt.Sprintf("%s/%s?%s", apiBaseURL, endpoint, query)
 }
 
+// StatusError is a ScreenScraper response with a status that will not change
+// on retry, such as bad developer credentials or an exhausted quota.
+type StatusError struct {
+	StatusCode int
+	Body       string
+}
+
+var permanentStatusCauses = map[int]string{
+	400: "ScreenScraper rejected the request as malformed",
+	403: "ScreenScraper rejected developer credentials",
+	404: "ScreenScraper has no entry for the request",
+	423: "ScreenScraper API is closed",
+	426: "ScreenScraper has blacklisted this software name; update Scrapegoat",
+	430: "ScreenScraper daily quota exceeded",
+	431: "ScreenScraper failed-request quota exceeded (too many unrecognized ROMs today)",
+}
+
+// Error names the cause of the status, with the start of the response body.
+func (e *StatusError) Error() string {
+	cause, ok := permanentStatusCauses[e.StatusCode]
+	if !ok {
+		cause = "ScreenScraper returned an unexpected status"
+	}
+	msg := fmt.Sprintf("%s (%d)", cause, e.StatusCode)
+	if body := strings.TrimSpace(e.Body); body != "" {
+		if len(body) > 200 {
+			body = body[:200] + "..."
+		}
+		msg += ": " + body
+	}
+	return msg
+}
+
+func isTransientStatus(status int) bool {
+	return status == http.StatusUnauthorized || status >= 500
+}
+
+func isNotFound(err error) bool {
+	var se *StatusError
+	return errors.As(err, &se) && se.StatusCode == http.StatusNotFound
+}
+
 func getJSONWithRetry[T any](c *Client, endpoint string, params url.Values) (*T, error) {
 	apiURL := fmt.Sprintf("%s/%s?%s", apiBaseURL, endpoint, params.Encode())
 	logURL := redactedURL(endpoint, params)
@@ -319,6 +364,9 @@ func getJSONWithRetry[T any](c *Client, endpoint string, params url.Values) (*T,
 		}
 
 		if resp.StatusCode != http.StatusOK {
+			if !isTransientStatus(resp.StatusCode) {
+				return nil, &StatusError{StatusCode: resp.StatusCode, Body: string(body)}
+			}
 			lastErr = fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 			continue
 		}
