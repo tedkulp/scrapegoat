@@ -580,3 +580,20 @@ func TestDebugOutputLogsRequestURLWithoutPasswords(t *testing.T) {
 		}
 	}
 }
+
+func TestQuotaIsUnchangedByUserInfoResponseWithoutSSUser(t *testing.T) {
+	body := `{"response":{"ssuser":{"requeststoday":"10","maxrequestsperday":"100"}}}`
+	h := newHarness(t, func(int) *http.Response { return respond(http.StatusOK, body) })
+
+	if _, err := h.client.GetUserInfo(); err != nil {
+		t.Fatal(err)
+	}
+	body = `{"response":{}}`
+	if _, err := h.client.GetUserInfo(); err != nil {
+		t.Fatal(err)
+	}
+
+	if q := h.client.Quota(); !q.Known || q.RequestsToday != 10 {
+		t.Errorf("expected quota 10/100 to survive a response without ssuser, got %+v", q)
+	}
+}

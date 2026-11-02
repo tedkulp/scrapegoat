@@ -139,6 +139,7 @@ const (
 	OutcomeNonGame
 )
 
+// String returns the glossary name of the outcome.
 func (o Outcome) String() string {
 	switch o {
 	case OutcomeMatch:
@@ -259,8 +260,6 @@ func (c *Client) debugf(format string, args ...any) {
 	}
 }
 
-// get sends one HTTP request, first waiting out the throttle so consecutive
-// requests are at least c.throttle apart.
 func (c *Client) get(apiURL string) (*http.Response, error) {
 	c.mu.Lock()
 	if !c.lastRequest.IsZero() {
@@ -388,6 +387,9 @@ func (c *Client) GetUserInfo() (*UserInfo, error) {
 		return nil, fmt.Errorf("failed to fetch user info: %w", err)
 	}
 
-	c.setQuota(&apiResp.Response.SSUser)
-	return &apiResp.Response.SSUser, nil
+	if apiResp.Response.SSUser == nil {
+		return &UserInfo{}, nil
+	}
+	c.setQuota(apiResp.Response.SSUser)
+	return apiResp.Response.SSUser, nil
 }

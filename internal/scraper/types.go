@@ -230,7 +230,7 @@ type SystemsListJSONResponse struct {
 // UserInfoJSONResponse represents the JSON response from ssuserInfos.php
 type UserInfoJSONResponse struct {
 	Response struct {
-		SSUser UserInfo `json:"ssuser"`
+		SSUser *UserInfo `json:"ssuser"`
 	} `json:"response"`
 }
 
