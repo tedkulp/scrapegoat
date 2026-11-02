@@ -707,6 +707,17 @@ func expandPathTemplate(path string, platformName string) string {
 	return path
 }
 
+// quotaLines formats the quota and failed-request quota lines shown by user-info.
+func quotaLines(userInfo *scraper.UserInfo) []string {
+	return []string{
+		fmt.Sprintf("Requests Today: %s", userInfo.RequestsToday),
+		fmt.Sprintf("Max Requests Per Day: %s", userInfo.MaxRequestsPerDay),
+		fmt.Sprintf("Max Requests Per Minute: %s", userInfo.MaxRequestsPerMinute),
+		fmt.Sprintf("Failed Requests Today: %s / %s", userInfo.RequestsKOToday, userInfo.MaxRequestsKOPerDay),
+		fmt.Sprintf("Max Threads: %s", userInfo.MaxThreads),
+	}
+}
+
 func runUserInfo(cmd *cobra.Command, args []string) {
 	// Load configuration
 	cfg, err := config.Load(cfgFile)
@@ -740,12 +751,9 @@ func runUserInfo(cmd *cobra.Command, args []string) {
 	logInfo("Uploads: %s", userInfo.Uploads)
 
 	logInfo("\n=== API Quota ===")
-	logInfo("Requests Today: %s", userInfo.RequestsToday)
-	logInfo("Max Requests Per Day: %s", userInfo.MaxRequestsPerDay)
-	logInfo("Max Requests Per Hour: %s", userInfo.MaxRequestsPerHour)
-	logInfo("Max Requests Per Minute: %s", userInfo.MaxRequestsPerMinute)
-	logInfo("Max Requests Per Second: %s", userInfo.MaxRequestsPerSecond)
-	logInfo("Max Threads: %s", userInfo.MaxThreads)
+	for _, line := range quotaLines(userInfo) {
+		logInfo("%s", line)
+	}
 
 	// Calculate remaining requests
 	if userInfo.RequestsToday != "" && userInfo.MaxRequestsPerDay != "" {
