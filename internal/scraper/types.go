@@ -1,6 +1,7 @@
 package scraper
 
 import (
+	"strconv"
 	"strings"
 	"time"
 )
@@ -8,8 +9,8 @@ import (
 // GameInfoJSONResponse represents the JSON response from jeuInfos.php
 type GameInfoJSONResponse struct {
 	Response struct {
-		SSUser UserInfo `json:"ssuser"`
-		Game   *Game    `json:"jeu"`
+		SSUser *UserInfo `json:"ssuser"`
+		Game   *Game     `json:"jeu"`
 	} `json:"response"`
 }
 
@@ -255,6 +256,29 @@ type UserInfo struct {
 	MaxRequestsKOPerDay string `json:"maxrequestskoperday"`
 }
 
+// Quota is the user account's daily allowance of ScreenScraper requests and
+// how much of it has been used. Known is false until a response carrying
+// parseable quota numbers has been seen.
+type Quota struct {
+	RequestsToday     int
+	MaxRequestsPerDay int
+	Known             bool
+}
+
+// Remaining returns how many requests are left today.
+func (q Quota) Remaining() int {
+	return q.MaxRequestsPerDay - q.RequestsToday
+}
+
+func quotaFrom(u *UserInfo) Quota {
+	today, err1 := strconv.Atoi(strings.TrimSpace(u.RequestsToday))
+	limit, err2 := strconv.Atoi(strings.TrimSpace(u.MaxRequestsPerDay))
+	if err1 != nil || err2 != nil {
+		return Quota{}
+	}
+	return Quota{RequestsToday: today, MaxRequestsPerDay: limit, Known: true}
+}
+
 // GameCacheEntry represents a cached game info entry
 type GameCacheEntry struct {
 	FetchedAt time.Time `json:"fetched_at"`
@@ -263,12 +287,12 @@ type GameCacheEntry struct {
 	IsNonGame bool      `json:"is_non_game"` // True if ROM is marked as non-game
 }
 
-// IsExpired checks if the cache entry is older than the specified duration
-func (g *GameCacheEntry) IsExpired(expirationHours int) bool {
+// IsExpired checks if the cache entry is older than the specified duration at time now
+func (g *GameCacheEntry) IsExpired(now time.Time, expirationHours int) bool {
 	if expirationHours <= 0 {
 		expirationHours = 12
 	}
-	return time.Since(g.FetchedAt) > time.Duration(expirationHours)*time.Hour
+	return now.Sub(g.FetchedAt) > time.Duration(expirationHours)*time.Hour
 }
 
 // SystemJSON represents a gaming platform/system from ScreenScraper (JSON format)

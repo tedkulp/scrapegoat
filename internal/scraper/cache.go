@@ -12,16 +12,18 @@ import (
 type GameCache struct {
 	cacheDir        string
 	expirationHours int
+	now             func() time.Time
 }
 
-// NewGameCache creates a new game cache
-func NewGameCache(cacheDir string, expirationHours int) *GameCache {
+// NewGameCache creates a new game cache that reads the current time from now.
+func NewGameCache(cacheDir string, expirationHours int, now func() time.Time) *GameCache {
 	if expirationHours <= 0 {
 		expirationHours = 12
 	}
 	return &GameCache{
 		cacheDir:        cacheDir,
 		expirationHours: expirationHours,
+		now:             now,
 	}
 }
 
@@ -69,7 +71,7 @@ func (gc *GameCache) Get(hashes *ROMHashes) CacheResult {
 	}
 
 	// Check if expired
-	if entry.IsExpired(gc.expirationHours) {
+	if entry.IsExpired(gc.now(), gc.expirationHours) {
 		return CacheResult{Found: false}
 	}
 
@@ -85,7 +87,7 @@ func (gc *GameCache) Get(hashes *ROMHashes) CacheResult {
 // Set saves game info to cache
 func (gc *GameCache) Set(hashes *ROMHashes, game *Game) error {
 	return gc.setCacheEntry(hashes, GameCacheEntry{
-		FetchedAt: time.Now(),
+		FetchedAt: gc.now(),
 		Game:      game,
 		NotFound:  false,
 		IsNonGame: false,
@@ -95,7 +97,7 @@ func (gc *GameCache) Set(hashes *ROMHashes, game *Game) error {
 // SetNotFound caches a "not found" result for a ROM
 func (gc *GameCache) SetNotFound(hashes *ROMHashes) error {
 	return gc.setCacheEntry(hashes, GameCacheEntry{
-		FetchedAt: time.Now(),
+		FetchedAt: gc.now(),
 		Game:      nil,
 		NotFound:  true,
 		IsNonGame: false,
@@ -105,7 +107,7 @@ func (gc *GameCache) SetNotFound(hashes *ROMHashes) error {
 // SetNonGame caches a "non-game" result for a ROM
 func (gc *GameCache) SetNonGame(hashes *ROMHashes, game *Game) error {
 	return gc.setCacheEntry(hashes, GameCacheEntry{
-		FetchedAt: time.Now(),
+		FetchedAt: gc.now(),
 		Game:      game,
 		NotFound:  false,
 		IsNonGame: true,

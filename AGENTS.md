@@ -22,7 +22,7 @@
 - Exported types, functions, and methods must have doc comments starting with the name (e.g., `// Client handles...`)
 
 ### Naming Conventions
-- Exported: `PascalCase` (e.g., `GetGameInfo`, `NewClient`)
+- Exported: `PascalCase` (e.g., `Lookup`, `NewClient`)
 - Unexported: `camelCase` (e.g., `apiBaseURL`, `parseRating`)
 - Receivers: short 1-2 letter lowercase (e.g., `c *Client`, `g *Generator`)
 - Avoid stuttering: use `client.New()` not `client.NewClient()` when package name provides context
