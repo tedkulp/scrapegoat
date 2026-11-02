@@ -37,5 +37,5 @@ A separate daily allowance of ScreenScraper requests that may fail (ScreenScrape
 _Avoid_: KO quota, error limit
 
 **Throttle**:
-The minimum gap Scrapegoat leaves between consecutive ScreenScraper requests, so it stays polite and inside the per-second limit.
+The minimum gap Scrapegoat leaves between consecutive ScreenScraper requests, so it stays polite and inside its per-minute request limit.
 _Avoid_: Delay, sleep, backoff (backoff is the wait before a retry)
