@@ -98,3 +98,19 @@ func TestFilterExistingMediaFiles_Empty(t *testing.T) {
 		t.Errorf("expected 0 to download, got %d", len(toDownload))
 	}
 }
+
+func TestCacheDurationMessage_UsesConfiguredHours(t *testing.T) {
+	got := cacheDurationMessage(48)
+	want := "Game data is cached for 48 hours"
+	if got != want {
+		t.Errorf("cacheDurationMessage(48) = %q, want %q", got, want)
+	}
+}
+
+func TestCacheDurationMessage_SingleHour(t *testing.T) {
+	got := cacheDurationMessage(1)
+	want := "Game data is cached for 1 hour"
+	if got != want {
+		t.Errorf("cacheDurationMessage(1) = %q, want %q", got, want)
+	}
+}
