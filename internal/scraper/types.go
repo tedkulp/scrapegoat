@@ -1,17 +1,9 @@
 package scraper
 
 import (
-	"encoding/xml"
 	"strings"
 	"time"
 )
-
-// APIResponse represents the root XML response from ScreenScraper API
-type APIResponse struct {
-	XMLName xml.Name `xml:"Data"`
-	Header  Header   `xml:"ssuser"`
-	Game    *Game    `xml:"jeu"`
-}
 
 // GameInfoJSONResponse represents the JSON response from jeuInfos.php
 type GameInfoJSONResponse struct {
@@ -19,15 +11,6 @@ type GameInfoJSONResponse struct {
 		SSUser UserInfo `json:"ssuser"`
 		Game   *Game    `json:"jeu"`
 	} `json:"response"`
-}
-
-// Header contains API response metadata and user info
-type Header struct {
-	ID            string `xml:"id"`
-	NumeroID      string `xml:"numeroid"`
-	MaxThreads    string `xml:"maxthreads"`
-	RequestsToday string `xml:"requeststoday"`
-	MaxRequests   string `xml:"maxrequestskohour"`
 }
 
 // Game represents game information from ScreenScraper
@@ -234,12 +217,6 @@ func (g *Game) IsNonGame() bool {
 		}
 	}
 	return false
-}
-
-// SystemsListResponse represents the XML response from systemesListe.php
-type SystemsListResponse struct {
-	XMLName xml.Name `xml:"Data"`
-	Systems []System `xml:"systemes>systeme"`
 }
 
 // SystemsListJSONResponse represents the JSON response from systemesListe.php
