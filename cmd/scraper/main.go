@@ -608,9 +608,6 @@ func runScraper(cmd *cobra.Command, args []string) {
 	}
 }
 
-// lookupGame queries the client for a ROM's game info and treats a nil game
-// (a cached "not found" result) as an error, so callers handle it like an
-// uncached not-found instead of dereferencing a nil *Game.
 func lookupGame(client *scraper.Client, systemID int, romName string, hashes *scraper.ROMHashes) (*scraper.Game, *scraper.UserInfo, bool, error) {
 	game, userInfo, cached, err := client.GetGameInfo(systemID, romName, hashes)
 	if err != nil {

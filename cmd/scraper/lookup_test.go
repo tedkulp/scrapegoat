@@ -15,7 +15,6 @@ func TestLookupGame_CachedNotFoundIsReportedAsFailure(t *testing.T) {
 		Size:  1024,
 	}
 
-	// A previous run cached this ROM as "not found"
 	if err := scraper.NewGameCache(cacheDir, 24).SetNotFound(hashes); err != nil {
 		t.Fatalf("seeding cache: %v", err)
 	}
