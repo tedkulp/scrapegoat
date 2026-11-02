@@ -23,19 +23,19 @@ type ROMHashes struct {
 
 // HashROMFile calculates CRC32, MD5, and SHA1 hashes for a ROM file
 // If the file is a ZIP archive, it hashes the ROM file inside the archive
-func HashROMFile(filepath string) (*ROMHashes, error) {
+func HashROMFile(path string) (*ROMHashes, error) {
 	// Check if this is a ZIP file
-	if strings.ToLower(filepath[len(filepath)-4:]) == ".zip" {
-		return hashZippedROM(filepath)
+	if strings.EqualFold(filepath.Ext(path), ".zip") {
+		return hashZippedROM(path)
 	}
 
 	// Regular file hashing
-	return hashFile(filepath)
+	return hashFile(path)
 }
 
 // hashFile computes hashes for a regular file
-func hashFile(filepath string) (*ROMHashes, error) {
-	file, err := os.Open(filepath)
+func hashFile(path string) (*ROMHashes, error) {
+	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
