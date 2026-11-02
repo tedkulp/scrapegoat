@@ -150,6 +150,47 @@ func TestGetSystemsListSucceedsOnThirdAttempt(t *testing.T) {
 	}
 }
 
+func TestGetUserInfoSucceedsOnThirdAttempt(t *testing.T) {
+	c, calls, sleeps := newTestClient(func(attempt int) *http.Response {
+		if attempt < 3 {
+			return respond(http.StatusInternalServerError, "boom")
+		}
+		return respond(http.StatusOK, `{"response":{"ssuser":{"id":"ted","requeststoday":"5"}}}`)
+	})
+
+	info, err := c.GetUserInfo()
+	if err != nil {
+		t.Fatalf("expected success on third attempt, got %v", err)
+	}
+	if info == nil || info.ID != "ted" || info.RequestsToday != "5" {
+		t.Errorf("unexpected user info: %+v", info)
+	}
+	if *calls != 3 {
+		t.Errorf("expected 3 attempts, got %d", *calls)
+	}
+	want := []time.Duration{2 * time.Second, 4 * time.Second}
+	if !slices.Equal(*sleeps, want) {
+		t.Errorf("expected backoff %v, got %v", want, *sleeps)
+	}
+}
+
+func TestGetUserInfoMakesThreeAttemptsBeforeGivingUp(t *testing.T) {
+	c, calls, _ := newTestClient(func(int) *http.Response {
+		return respond(http.StatusInternalServerError, "boom")
+	})
+
+	info, err := c.GetUserInfo()
+	if err == nil || !strings.Contains(err.Error(), "failed after 3 attempts") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if info != nil {
+		t.Errorf("expected nil user info, got %+v", info)
+	}
+	if *calls != 3 {
+		t.Errorf("expected 3 attempts, got %d", *calls)
+	}
+}
+
 func TestGetSystemsListSkipsRateLimitDelayOnFinalAttempt(t *testing.T) {
 	c, calls, sleeps := newTestClient(func(int) *http.Response {
 		return respond(http.StatusTooManyRequests, "slow down")

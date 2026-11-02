@@ -190,34 +190,6 @@ func getJSONWithRetry[T any](c *Client, apiURL string) (*T, error) {
 	return nil, fmt.Errorf("failed after %d attempts: %w", maxAttempts, lastErr)
 }
 
-// DownloadMedia downloads a media file from the given URL
-func (c *Client) DownloadMedia(mediaURL string) ([]byte, error) {
-	if c.debug {
-		fmt.Fprintf(os.Stderr, "[DEBUG] API: DownloadMedia - CALLING API (%s)\n", filepath.Base(mediaURL))
-	}
-	resp, err := c.httpClient.Get(mediaURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to download media: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("media download returned status %d", resp.StatusCode)
-	}
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read media data: %w", err)
-	}
-
-	return data, nil
-}
-
-// SetTimeout sets the HTTP client timeout
-func (c *Client) SetTimeout(timeout time.Duration) {
-	c.httpClient.Timeout = timeout
-}
-
 // GetSystemsList fetches the list of all systems/platforms from ScreenScraper
 func (c *Client) GetSystemsList() ([]System, error) {
 	params := url.Values{}
@@ -288,24 +260,9 @@ func (c *Client) GetUserInfo() (*UserInfo, error) {
 
 	apiURL := fmt.Sprintf("%s/ssuserInfos.php?%s", apiBaseURL, params.Encode())
 
-	resp, err := c.httpClient.Get(apiURL)
+	apiResp, err := getJSONWithRetry[UserInfoJSONResponse](c, apiURL)
 	if err != nil {
-		return nil, fmt.Errorf("API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var apiResp UserInfoJSONResponse
-	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return nil, fmt.Errorf("failed to decode API response: %w", err)
+		return nil, err
 	}
 
 	return &apiResp.Response.SSUser, nil

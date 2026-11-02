@@ -10,8 +10,8 @@ import (
 
 // GameCache handles caching of game information
 type GameCache struct {
-	cacheDir         string
-	expirationHours  int
+	cacheDir        string
+	expirationHours int
 }
 
 // NewGameCache creates a new game cache
@@ -31,12 +31,16 @@ func (gc *GameCache) getCacheKey(hashes *ROMHashes) string {
 	return hashes.MD5
 }
 
-// getCacheFilePath returns the full path to the cache file for a ROM
-func (gc *GameCache) getCacheFilePath(cacheKey string) string {
+// getCacheFilePath returns the full path to the cache file for a ROM.
+// It fails for keys shorter than two characters, which cannot be sharded.
+func (gc *GameCache) getCacheFilePath(cacheKey string) (string, error) {
+	if len(cacheKey) < 2 {
+		return "", fmt.Errorf("cache key %q is too short", cacheKey)
+	}
 	// Use first 2 characters of hash for subdirectory (like git does)
 	// This prevents too many files in a single directory
 	subdir := cacheKey[:2]
-	return filepath.Join(gc.cacheDir, "games", subdir, cacheKey+".json")
+	return filepath.Join(gc.cacheDir, "games", subdir, cacheKey+".json"), nil
 }
 
 // CacheResult represents a cache lookup result
@@ -50,8 +54,10 @@ type CacheResult struct {
 // Get retrieves cached game info if available and not expired
 // Returns a CacheResult with information about what was found in cache
 func (gc *GameCache) Get(hashes *ROMHashes) CacheResult {
-	cacheKey := gc.getCacheKey(hashes)
-	cacheFile := gc.getCacheFilePath(cacheKey)
+	cacheFile, err := gc.getCacheFilePath(gc.getCacheKey(hashes))
+	if err != nil {
+		return CacheResult{Found: false}
+	}
 
 	data, err := os.ReadFile(cacheFile)
 	if err != nil {
@@ -109,8 +115,10 @@ func (gc *GameCache) SetNonGame(hashes *ROMHashes, game *Game) error {
 
 // setCacheEntry is the internal method that writes cache entries
 func (gc *GameCache) setCacheEntry(hashes *ROMHashes, entry GameCacheEntry) error {
-	cacheKey := gc.getCacheKey(hashes)
-	cacheFile := gc.getCacheFilePath(cacheKey)
+	cacheFile, err := gc.getCacheFilePath(gc.getCacheKey(hashes))
+	if err != nil {
+		return err
+	}
 
 	// Ensure cache directory exists
 	if err := os.MkdirAll(filepath.Dir(cacheFile), 0755); err != nil {
@@ -127,35 +135,4 @@ func (gc *GameCache) setCacheEntry(hashes *ROMHashes, entry GameCacheEntry) erro
 	}
 
 	return nil
-}
-
-// GetCacheStats returns statistics about the cache
-func (gc *GameCache) GetCacheStats() (total int, expired int, err error) {
-	gamesDir := filepath.Join(gc.cacheDir, "games")
-
-	err = filepath.Walk(gamesDir, func(path string, info os.FileInfo, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-
-		if info.IsDir() || filepath.Ext(path) != ".json" {
-			return nil
-		}
-
-		total++
-
-		data, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return nil // Skip unreadable files
-		}
-
-		var entry GameCacheEntry
-		if json.Unmarshal(data, &entry) == nil && entry.IsExpired(gc.expirationHours) {
-			expired++
-		}
-
-		return nil
-	})
-
-	return total, expired, err
 }
