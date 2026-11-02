@@ -604,8 +604,17 @@ func runScraper(cmd *cobra.Command, args []string) {
 	if verbose {
 		logInfo("\n=== Cache Info ===")
 		logInfo("Cache directory: %s/games", cacheDir)
-		logInfo("Game data is cached for 12 hours")
+		logInfo("%s", cacheDurationMessage(cfg.GetCacheExpiration()))
 	}
+}
+
+// cacheDurationMessage describes how long game data stays cached.
+func cacheDurationMessage(hours int) string {
+	unit := "hours"
+	if hours == 1 {
+		unit = "hour"
+	}
+	return fmt.Sprintf("Game data is cached for %d %s", hours, unit)
 }
 
 func filterExistingMediaFiles(mediaFiles []downloader.MediaFile, mediaRootDir string) (existing map[string]string, toDownload []downloader.MediaFile) {
