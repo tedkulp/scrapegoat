@@ -351,7 +351,7 @@ func runScraper(cmd *cobra.Command, args []string) {
 			debugURL := scraperClient.GetDebugURL(platform.ID, rom.Filename, hashes)
 			logVerbose("  API URL: %s", debugURL)
 		}
-		game, freshUserInfo, cached, err := scraperClient.GetGameInfo(platform.ID, rom.Filename, hashes)
+		game, freshUserInfo, cached, err := lookupGame(scraperClient, platform.ID, rom.Filename, hashes)
 		if err != nil {
 			logError("  Failed to get game info: %v", err)
 			errorCount++
@@ -606,6 +606,17 @@ func runScraper(cmd *cobra.Command, args []string) {
 		logInfo("Cache directory: %s/games", cacheDir)
 		logInfo("%s", cacheDurationMessage(cfg.GetCacheExpiration()))
 	}
+}
+
+func lookupGame(client *scraper.Client, systemID int, romName string, hashes *scraper.ROMHashes) (*scraper.Game, *scraper.UserInfo, bool, error) {
+	game, userInfo, cached, err := client.GetGameInfo(systemID, romName, hashes)
+	if err != nil {
+		return nil, nil, cached, err
+	}
+	if game == nil {
+		return nil, nil, cached, fmt.Errorf("game not found in ScreenScraper database (cached)")
+	}
+	return game, userInfo, cached, nil
 }
 
 // cacheDurationMessage describes how long game data stays cached.
