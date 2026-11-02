@@ -19,7 +19,7 @@ import (
 )
 
 var (
-	version = "1.0.0"
+	version = "dev"
 	cfgFile string
 	verbose bool
 )
