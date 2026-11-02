@@ -39,3 +39,25 @@ _Avoid_: KO quota, error limit
 **Throttle**:
 The minimum gap Scrapegoat leaves between consecutive ScreenScraper requests, so it stays polite and inside its per-minute request limit.
 _Avoid_: Delay, sleep, backoff (backoff is the wait before a retry)
+
+### Placing media
+
+**Media type**:
+A kind of media EmulationStation shows for a game, such as box front, screenshot or video. Each ROM gets at most one file per media type.
+_Avoid_: Asset type, image kind
+
+**Media root**:
+The directory EmulationStation reads media from, with one subdirectory per media type.
+_Avoid_: Final location, output dir, destination
+
+**Media cache**:
+Scrapegoat's own copy of every media file it has fetched from ScreenScraper, kept across runs so placing the same media again costs no quota.
+_Avoid_: Temp dir, download dir
+
+**Media identity**:
+What a media file is in ScreenScraper's terms: the system, the game and the media name with its region. It tells whether a cached file is still the one a lookup now selects.
+_Avoid_: Media URL (the URL also carries credentials and a mirror host)
+
+**Media plan**:
+For one ROM, which media files are already in the media root, which come from the media cache, and which must be downloaded.
+_Avoid_: Download list
