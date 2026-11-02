@@ -3,6 +3,7 @@ package scraper
 import (
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -51,7 +52,7 @@ func TestGetGameInfoMakesThreeAttemptsBeforeGivingUp(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 	want := []time.Duration{2 * time.Second, 4 * time.Second}
-	if len(*sleeps) != len(want) || (*sleeps)[0] != want[0] || (*sleeps)[1] != want[1] {
+	if !slices.Equal(*sleeps, want) {
 		t.Errorf("expected backoff %v, got %v", want, *sleeps)
 	}
 }
