@@ -73,3 +73,97 @@ func TestGetGameInfoSucceedsOnThirdAttempt(t *testing.T) {
 		t.Errorf("expected 3 attempts, got %d", *calls)
 	}
 }
+
+func TestGetGameInfoSkipsRateLimitDelayOnFinalAttempt(t *testing.T) {
+	c, calls, sleeps := newTestClient(func(int) *http.Response {
+		return respond(http.StatusTooManyRequests, "slow down")
+	})
+
+	_, _, _, err := c.GetGameInfo(3, "game.nes", nil)
+	if err == nil || !strings.Contains(err.Error(), "failed after 3 attempts") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if *calls != 3 {
+		t.Errorf("expected 3 attempts, got %d", *calls)
+	}
+	want := []time.Duration{10 * time.Second, 2 * time.Second, 10 * time.Second, 4 * time.Second}
+	if !slices.Equal(*sleeps, want) {
+		t.Errorf("expected sleeps %v, got %v", want, *sleeps)
+	}
+}
+
+func TestGetGameInfoNotFoundIsNotRetried(t *testing.T) {
+	c, calls, sleeps := newTestClient(func(int) *http.Response {
+		return respond(http.StatusOK, `{"response":{}}`)
+	})
+
+	game, _, _, err := c.GetGameInfo(3, "game.nes", nil)
+	if err == nil || !strings.Contains(err.Error(), "game not found") {
+		t.Fatalf("expected not-found error, got %v", err)
+	}
+	if game != nil {
+		t.Errorf("expected nil game, got %v", game)
+	}
+	if *calls != 1 {
+		t.Errorf("expected 1 attempt, got %d", *calls)
+	}
+	if len(*sleeps) != 0 {
+		t.Errorf("expected no sleeps, got %v", *sleeps)
+	}
+}
+
+func TestGetSystemsListMakesThreeAttemptsBeforeGivingUp(t *testing.T) {
+	c, calls, sleeps := newTestClient(func(int) *http.Response {
+		return respond(http.StatusInternalServerError, "boom")
+	})
+
+	_, err := c.GetSystemsList()
+	if err == nil || !strings.Contains(err.Error(), "failed after 3 attempts") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if *calls != 3 {
+		t.Errorf("expected 3 attempts, got %d", *calls)
+	}
+	want := []time.Duration{2 * time.Second, 4 * time.Second}
+	if !slices.Equal(*sleeps, want) {
+		t.Errorf("expected backoff %v, got %v", want, *sleeps)
+	}
+}
+
+func TestGetSystemsListSucceedsOnThirdAttempt(t *testing.T) {
+	c, calls, _ := newTestClient(func(attempt int) *http.Response {
+		if attempt < 3 {
+			return respond(http.StatusServiceUnavailable, "busy")
+		}
+		return respond(http.StatusOK, `{"response":{"systemes":[{"id":3,"noms":{"nom_us":"NES"},"extensions":"nes,zip"}]}}`)
+	})
+
+	systems, err := c.GetSystemsList()
+	if err != nil {
+		t.Fatalf("expected success on third attempt, got %v", err)
+	}
+	if *calls != 3 {
+		t.Errorf("expected 3 attempts, got %d", *calls)
+	}
+	if len(systems) != 1 || systems[0].ID != 3 || !slices.Equal(systems[0].Extensions, []string{".nes", ".zip"}) {
+		t.Errorf("unexpected systems: %+v", systems)
+	}
+}
+
+func TestGetSystemsListSkipsRateLimitDelayOnFinalAttempt(t *testing.T) {
+	c, calls, sleeps := newTestClient(func(int) *http.Response {
+		return respond(http.StatusTooManyRequests, "slow down")
+	})
+
+	_, err := c.GetSystemsList()
+	if err == nil || !strings.Contains(err.Error(), "failed after 3 attempts") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if *calls != 3 {
+		t.Errorf("expected 3 attempts, got %d", *calls)
+	}
+	want := []time.Duration{10 * time.Second, 2 * time.Second, 10 * time.Second, 4 * time.Second}
+	if !slices.Equal(*sleeps, want) {
+		t.Errorf("expected sleeps %v, got %v", want, *sleeps)
+	}
+}

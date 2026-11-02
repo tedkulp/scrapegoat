@@ -39,7 +39,7 @@
 
 ### Patterns in This Codebase
 - Config loading uses Viper with YAML
-- HTTP client uses 30s timeout, retry logic with exponential backoff (2s, 4s, 8s)
+- HTTP client uses 30s timeout, retry logic with exponential backoff (3 attempts, 2s then 4s)
 - File paths use `filepath` package, always handle both absolute and relative paths
 - Media downloads use worker pool pattern with channels
 - Cache uses JSON files in `~/.scrapegoat/` with MD5-based filenames
