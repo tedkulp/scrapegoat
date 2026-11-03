@@ -18,7 +18,7 @@ import (
 
 func TestPlan_PicksOneFilePerTypeByRegionPreference(t *testing.T) {
 	root, cache := t.TempDir(), t.TempDir()
-	p := New(cache, "nes", root, 2)
+	p := New(cache, 3, root, 2)
 	game := &screenscraper.Game{Medias: []screenscraper.Media{
 		{Type: "ss", Region: "jp", Format: "png", URL: "http://x/ss-jp"},
 		{Type: "ss", Region: "eu", Format: "png", URL: "http://x/ss-eu"},
@@ -52,7 +52,7 @@ func TestPlan_PicksOneFilePerTypeByRegionPreference(t *testing.T) {
 		if it.Path != wantPath {
 			t.Errorf("%s: Path %q, want %q", it.MediaType, it.Path, wantPath)
 		}
-		wantCache := filepath.Join(cache, "cache", "nes", it.MediaType, "Game (USA)"+wantExt[it.MediaType])
+		wantCache := filepath.Join(cache, "cache", "3", it.MediaType, "Game (USA)"+wantExt[it.MediaType])
 		if it.CachePath != wantCache {
 			t.Errorf("%s: CachePath %q, want %q", it.MediaType, it.CachePath, wantCache)
 		}
@@ -63,7 +63,7 @@ func TestPlan_PicksOneFilePerTypeByRegionPreference(t *testing.T) {
 }
 
 func TestPlan_MapsEveryScreenScraperType(t *testing.T) {
-	p := New(t.TempDir(), "nes", t.TempDir(), 1)
+	p := New(t.TempDir(), 3, t.TempDir(), 1)
 	mapping := map[string]string{
 		"box-3D":      "3dboxes",
 		"box-2D":      "box2dfront",
@@ -125,7 +125,7 @@ func newFixture(t *testing.T) *fixture {
 }
 
 func (f *fixture) placer() *Placer {
-	return New(f.cacheDir, "nes", f.root, 3, WithHTTPClient(f.srv.Client()))
+	return New(f.cacheDir, 3, f.root, 3, WithHTTPClient(f.srv.Client()))
 }
 
 // url builds a ScreenScraper-style media URL carrying credentials.
@@ -145,7 +145,7 @@ func (f *fixture) rootPath(mediaType, name string) string {
 }
 
 func (f *fixture) cachePath(mediaType, name string) string {
-	return filepath.Join(f.cacheDir, "cache", "nes", mediaType, name)
+	return filepath.Join(f.cacheDir, "cache", "3", mediaType, name)
 }
 
 func writeFile(t *testing.T, path, content string) {
@@ -416,14 +416,14 @@ func TestExecute_BodyFailingMidCopyLeavesNoFile(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	p := New(cacheDir, "nes", root, 2, WithHTTPClient(srv.Client()))
+	p := New(cacheDir, 3, root, 2, WithHTTPClient(srv.Client()))
 	u := srv.URL + "/api2/mediaJeu.php?systemeid=3&jeuid=42&media=ss(us)"
 	res := p.Execute(p.Plan(ssGame(u), "Game.nes", Mode{}))
 
 	if res.Failed != 1 || res.Downloaded != 0 {
 		t.Errorf("failed=%d downloaded=%d, want 1/0", res.Failed, res.Downloaded)
 	}
-	cachePath := filepath.Join(cacheDir, "cache", "nes", "screenshots", "Game.png")
+	cachePath := filepath.Join(cacheDir, "cache", "3", "screenshots", "Game.png")
 	assertNotExist(t, cachePath)
 	assertNotExist(t, cachePath+".json")
 	assertNotExist(t, filepath.Join(root, "screenshots", "Game.png"))
@@ -460,7 +460,7 @@ func TestExecute_DebugOutputMasksPasswords(t *testing.T) {
 	f := newFixture(t)
 	f.bodies["ss(us)"] = "ss"
 	var buf strings.Builder
-	p := New(f.cacheDir, "nes", f.root, 1, WithHTTPClient(f.srv.Client()), WithDebugOutput(&buf))
+	p := New(f.cacheDir, 3, f.root, 1, WithHTTPClient(f.srv.Client()), WithDebugOutput(&buf))
 	p.Execute(p.Plan(ssGame(f.url("42", "ss(us)")), "Game.nes", Mode{}))
 
 	out := buf.String()

@@ -76,15 +76,15 @@ func WithDebugOutput(w io.Writer) Option {
 	return func(p *Placer) { p.debug = w }
 }
 
-// New returns a Placer that caches media under <cacheDir>/cache/<platform> and
+// New returns a Placer that caches media under <cacheDir>/cache/<systemID> and
 // places it under mediaRoot, fetching with up to workers concurrent requests.
 // It touches neither the filesystem nor the network.
-func New(cacheDir, platform, mediaRoot string, workers int, opts ...Option) *Placer {
+func New(cacheDir string, systemID int, mediaRoot string, workers int, opts ...Option) *Placer {
 	if workers < 1 {
 		workers = 1
 	}
 	p := &Placer{
-		cacheDir:   filepath.Join(cacheDir, "cache", platform),
+		cacheDir:   systemCacheDir(cacheDir, systemID),
 		mediaRoot:  mediaRoot,
 		workers:    workers,
 		httpClient: &http.Client{Timeout: 60 * time.Second},

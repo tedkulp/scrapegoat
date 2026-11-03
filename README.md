@@ -219,7 +219,7 @@ All caches live under `--cache-dir`, or `output.cache_dir` from the config file 
 |---|---|---|
 | Platform catalog (ScreenScraper's systems list as fetched) | `platforms.json` | after `--cache-hours` (12); a file from an older Scrapegoat version is fetched again once. If fetching a fresh list fails, an expired file is used with a one-line warning naming the error |
 | Game lookups, including "not found" | `games/` | after `--cache-hours` (12); after a cutoff, expired matches are still used, and an expired "not found" or non-game defers the ROM |
-| Media files | `cache/<platform>/<media-type>/` | never |
+| Media files | `cache/<system-id>/<media-type>/` (ScreenScraper system ID, e.g. `cache/3/` for NES; a `cache/<platform>/` folder from older versions is moved there on the next scrape with that `--platform`) | never |
 | Composed artwork | `artwork-cache/` | never; rebuilt when an output's settings or the media its layers use change |
 
 Cache hits make no API request and do not count against your quota. Each cached media file has a `.json` sidecar beside it recording which ScreenScraper media it is (system, game and media name, never credentials). When a lookup selects different media for a ROM, such as another region, the cached file is downloaded again. A cached file without a sidecar is trusted and given one. Delete the directory to start fresh: `rm -rf ~/.scrapegoat/`.

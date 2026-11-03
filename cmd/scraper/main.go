@@ -255,7 +255,18 @@ func runScraper(cmd *cobra.Command, args []string) {
 	if verbose {
 		mediaOpts = append(mediaOpts, media.WithDebugOutput(os.Stderr))
 	}
-	placer := media.New(cacheDir, platformName, mediaRootDir, settings.Workers, mediaOpts...)
+	// The media cache used to be keyed by the --platform slug as typed. Move
+	// that folder's media into the system ID folder. Dry runs write nothing,
+	// so they skip this and see only what is already in the ID folder.
+	if !dryRun {
+		moved, err := media.MigrateLegacyCache(cacheDir, platformName, platform.ID)
+		if err != nil {
+			log.Printf("Warning: moving the media cache from cache/%s to cache/%d: %v", platformName, platform.ID, err)
+		} else if moved > 0 {
+			logInfo("Moved %d cached media files from cache/%s to cache/%d", moved, platformName, platform.ID)
+		}
+	}
+	placer := media.New(cacheDir, platform.ID, mediaRootDir, settings.Workers, mediaOpts...)
 
 	// Step 3.5: Initialize artwork compositor if enabled
 	var compositor *artwork.Compositor

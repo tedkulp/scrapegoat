@@ -75,7 +75,7 @@ func (e *env) rom(name, content string) scanner.ROMFile {
 }
 
 func (e *env) placer() *media.Placer {
-	return media.New(e.cacheDir, "nes", e.root, 2, media.WithHTTPClient(e.srv.Client()))
+	return media.New(e.cacheDir, 3, e.root, 2, media.WithHTTPClient(e.srv.Client()))
 }
 
 func (e *env) compositor() *artwork.Compositor {
@@ -159,7 +159,7 @@ func TestScrape_MatchIsScrapedWithMediaPlacedAndArtworkComposed(t *testing.T) {
 func TestScrape_DryRunReturnsScrapedWithPlanAndWritesNothing(t *testing.T) {
 	e := newEnv(t)
 	// One file already in the media cache, one to download.
-	cached := filepath.Join(e.cacheDir, "cache", "nes", "box2dfront", "Super Game (USA).png")
+	cached := filepath.Join(e.cacheDir, "cache", "3", "box2dfront", "Super Game (USA).png")
 	if err := os.MkdirAll(filepath.Dir(cached), 0o755); err != nil {
 		t.Fatal(err)
 	}

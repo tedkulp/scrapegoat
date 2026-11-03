@@ -41,7 +41,7 @@ func TestExecute_CutoffStatusStopsEveryLaterFetch(t *testing.T) {
 
 	const workers = 3
 	cut := cutoff.New()
-	p := New(f.cacheDir, "nes", f.root, workers, WithHTTPClient(srv.Client()), WithCutoff(cut))
+	p := New(f.cacheDir, 3, f.root, workers, WithHTTPClient(srv.Client()), WithCutoff(cut))
 	res := p.Execute(p.Plan(game, "Game.nes", Mode{}))
 
 	cause, ok := cut.Cause()
@@ -75,7 +75,7 @@ func TestExecute_CutoffFromLookupStopsFetchesBeforeAnyRequest(t *testing.T) {
 	cut := cutoff.New()
 	cut.Trip(403, "bad dev credentials")
 
-	p := New(f.cacheDir, "nes", f.root, 3, WithHTTPClient(f.srv.Client()), WithCutoff(cut))
+	p := New(f.cacheDir, 3, f.root, 3, WithHTTPClient(f.srv.Client()), WithCutoff(cut))
 	res := p.Execute(p.Plan(game, "Game.nes", Mode{}))
 
 	if got := f.requests.Load(); got != 0 {
@@ -92,7 +92,7 @@ func TestExecute_CutoffFromLookupStopsFetchesBeforeAnyRequest(t *testing.T) {
 func TestExecute_NonCutoffStatusIsAPerFileFailure(t *testing.T) {
 	f := newFixture(t) // serves 404 for unknown media
 	cut := cutoff.New()
-	p := New(f.cacheDir, "nes", f.root, 1, WithHTTPClient(f.srv.Client()), WithCutoff(cut))
+	p := New(f.cacheDir, 3, f.root, 1, WithHTTPClient(f.srv.Client()), WithCutoff(cut))
 	res := p.Execute(p.Plan(ssGame(f.url("42", "ss(us)")), "Game.nes", Mode{}))
 
 	if cut.Tripped() || res.Failed != 1 || res.Deferred != 0 {
