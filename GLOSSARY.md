@@ -11,7 +11,7 @@ The whole job of turning one ROM into EmulationStation metadata and media: hashi
 _Avoid_: Process, lookup (a lookup is one step of a scrape)
 
 **Scrape outcome**:
-What a scrape produces: scraped, not found, or non-game. A scrape that could not hash or look up the ROM is a failure, not an outcome.
+What a scrape produces: scraped, not found, or non-game. A scrape that could not hash or look up the ROM is a failure, not an outcome; one stopped by a cutoff leaves a deferred ROM, which is neither.
 _Avoid_: Status, result type
 
 **Scraped**:
@@ -19,8 +19,12 @@ A scrape outcome where the ROM matched a game and its media and artwork were pla
 _Avoid_: Success, done
 
 **Unmatched ROM**:
-A ROM whose scrape ended as not found, non-game or a failure. Unmatched ROMs are what Scrapegoat offers to delete at the end of a run.
+A ROM whose scrape ended as not found, non-game or a failure other than a cutoff. Unmatched ROMs are what Scrapegoat offers to delete at the end of a run.
 _Avoid_: Failed ROM (not found and non-game ROMs did not fail), bad ROM
+
+**Deferred ROM**:
+A ROM the run could not look up because of a cutoff. A deferred ROM is left for the next run: it is never unmatched and never offered for deletion.
+_Avoid_: Skipped ROM (skipped suggests non-game), failed ROM, unmatched ROM
 
 **Unmatched ROM disposition**:
 What happens to a run's unmatched ROMs once the run ends: keep them, delete them, or ask the user.
@@ -33,7 +37,7 @@ Asking ScreenScraper (or the local cache of its earlier answers) which game a RO
 _Avoid_: Query, scrape (scrape is the whole per-ROM job, not just this step)
 
 **Lookup outcome**:
-The answer a lookup produces: a match, not found, or non-game. A lookup that could not get an answer at all is a failure, not an outcome.
+The answer a lookup produces: a match, not found, or non-game. A lookup that could not get an answer at all is a failure, not an outcome. After a cutoff, an answer cached by an earlier run still counts, however old.
 _Avoid_: Result status, response
 
 **Match**:
@@ -57,6 +61,10 @@ _Avoid_: Rate limit (that is the server refusing a request), allowance
 **Failed-request quota**:
 A separate daily allowance of ScreenScraper requests that may fail (ScreenScraper's "KO" fields, `requestskotoday` and `maxrequestskoperday`), counted apart from the main quota.
 _Avoid_: KO quota, error limit
+
+**Cutoff**:
+ScreenScraper refusing every further request from a run, because the quota or failed-request quota is used up, the developer credentials are rejected, the software is blacklisted or the API is closed. After a cutoff, the run sends no more requests, for lookups or media.
+_Avoid_: Rate limit (one refused request), quota exceeded (one cause of a cutoff), halt
 
 **Throttle**:
 The minimum gap Scrapegoat leaves between consecutive ScreenScraper requests, so it stays polite and inside its per-minute request limit.
