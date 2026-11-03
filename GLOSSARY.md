@@ -101,3 +101,21 @@ _Avoid_: Composite, generated media (media comes from ScreenScraper; artwork is 
 **Artwork output**:
 One kind of artwork the user defines, which produces one image per ROM, all in the same folder.
 _Avoid_: Output type, template
+
+### Choosing a platform
+
+**Platform**:
+A game system ScreenScraper catalogs, such as the NES or the Atari ST, with its ID, names and ROM file extensions. Every scrape runs against one platform.
+_Avoid_: System (ScreenScraper's word; use it only when talking about the API), console
+
+**Platform slug**:
+A short lowercase name the user types to pick a platform, made from one of the platform's names, such as `nes` or `atarist`. A platform with several names has several slugs.
+_Avoid_: Platform name (the name is ScreenScraper's display text), platform key
+
+**Platform alias**:
+A slug Scrapegoat adds for a platform when none of its own names produce the one users expect, such as `atari2600`.
+_Avoid_: Nickname, shortcut
+
+**Platform catalog**:
+Every platform Scrapegoat knows, from ScreenScraper and from the user's configuration, together with the slugs and aliases that pick them.
+_Avoid_: Platform list, platform cache (the cache is where the catalog is kept between runs)
