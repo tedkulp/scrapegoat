@@ -100,10 +100,12 @@ scrapegoat scrape --platform <platform> --rom-dir <path>
 | `-m, --media-root-dir` | rom-dir | Root directory for media subdirectories |
 | `--cache-dir` | `~/.scrapegoat` | Cache for the platform catalog, game lookups and media |
 | `-w, --workers` | `4` | Concurrent media download workers |
-| `--cache-hours` | `12` | Hours before cached platforms and game lookups expire |
+| `--cache-hours` | `12` | Hours before cached platforms and game lookups expire; must be greater than 0 |
 | `--force-redownload` | off | Re-download media files that already exist in the destination |
-| `--artwork` | from config | `true` or `false` to override `artwork.enabled` |
-| `--auto-delete` | prompt | `true` deletes unmatched ROMs without asking, `false` keeps them |
+| `--artwork` | from config | `true`/`1` or `false`/`0` to override `artwork.enabled` |
+| `--auto-delete` | prompt | `true`/`1` deletes unmatched ROMs without asking, `false`/`0` keeps them |
+
+`--auto-delete` and `--artwork` take any boolean Go's `strconv.ParseBool` accepts (`true`, `false`, `1`, `0`, `t`, `f`, ...). Any other value, or a `--cache-hours` of 0 or less, stops the run before scanning with an error naming the flag.
 | `--dry-run` | off | Query the API but download and write nothing |
 | `-v, --verbose` | off | Log every API request (passwords masked), cache hit and download |
 | `--config` | see above | Config file path |
@@ -201,7 +203,7 @@ Media files that already exist in the destination are not downloaded again unles
 
 ## Caching
 
-All caches live under `--cache-dir` (default `~/.scrapegoat`):
+All caches live under `--cache-dir`, or `output.cache_dir` from the config file when the flag is not given (default `~/.scrapegoat`). `{platform}` is expanded in both, so `cache_dir: ~/.scrapegoat/{platform}` gives each platform its own cache:
 
 | What | Where | Expires |
 |---|---|---|

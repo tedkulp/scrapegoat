@@ -32,7 +32,7 @@ screenscraper:
 output:
   gamelist_file: "gamelist.xml"
   media_dir: "media"
-  # cache_dir: "~/.scrapegoat"  # Default: ~/.scrapegoat - holds platforms.json, game lookups and media; --cache-dir overrides it
+  # cache_dir: "~/.scrapegoat"  # Default: ~/.scrapegoat - holds platforms.json, game lookups and media; --cache-dir overrides it; {platform} is replaced by the --platform value
 
 # Artwork generation settings (OPTIONAL)
 # Generate custom composed artwork from downloaded media files
