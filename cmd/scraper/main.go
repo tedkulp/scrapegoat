@@ -89,7 +89,7 @@ func init() {
 	scrapeCmd.Flags().StringVarP(&romDir, "rom-dir", "r", "", "ROM directory path (required)")
 	scrapeCmd.Flags().StringVarP(&gamelistDir, "gamelist-dir", "o", "", "directory for gamelist.xml output (default: same as rom-dir)")
 	scrapeCmd.Flags().StringVarP(&mediaRootDir, "media-root-dir", "m", "", "root directory for media files (default: same as rom-dir)")
-	scrapeCmd.Flags().StringVar(&cacheDir, "cache-dir", "", "cache directory for the platform list, game lookups and media (default: output.cache_dir, then ~/.scrapegoat)")
+	scrapeCmd.Flags().StringVar(&cacheDir, "cache-dir", "", "cache directory for the platform catalog, game lookups and media (default: output.cache_dir, then ~/.scrapegoat)")
 	scrapeCmd.Flags().IntVarP(&workers, "workers", "w", 4, "number of concurrent download workers")
 	scrapeCmd.Flags().BoolVar(&dryRun, "dry-run", false, "scan and query API but don't download or write files")
 	scrapeCmd.Flags().StringVar(&autoDelete, "auto-delete", "", "automatically delete failed ROMs: true=delete, false=keep, unset=prompt (default: prompt)")
