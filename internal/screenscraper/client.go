@@ -192,8 +192,13 @@ func outcomeFor(game *Game) Outcome {
 // After a cutoff, any cache entry answers, however old, and a ROM with no
 // entry gets a *cutoff.Error without a request being sent.
 func (c *Client) Lookup(systemID int, romName string, hashes *ROMHashes) (LookupResult, error) {
-	if result, ok := c.cachedLookup(hashes, c.cutoff.Tripped()); ok {
+	tripped := c.cutoff.Tripped()
+	if result, ok := c.cachedLookup(hashes, tripped); ok {
 		return result, nil
+	}
+	if tripped {
+		cause, _ := c.cutoff.Cause()
+		return LookupResult{}, fmt.Errorf("failed to look up game: %w", &cutoff.Error{Cause: cause})
 	}
 
 	params := c.creds.params()
