@@ -48,7 +48,7 @@ func (c Config) Validate() error {
 				describeOutput(i, def), layer.Resource, strings.Join(MediaTypes, ", ")))
 		}
 
-		t := target{dir: filepath.Clean(c.outputDirFor(def)), format: strings.ToLower(def.fileFormat())}
+		t := target{dir: filepath.Clean(c.outputDirFor(def)), format: def.fileFormat()}
 		if j, ok := firstWriter[t]; ok {
 			errs = append(errs, fmt.Errorf("artwork outputs %s and %s both write %s files to %q; give one of them its own output_dir",
 				describeOutput(j, c.Outputs[j]), describeOutput(i, def), t.format, t.dir))

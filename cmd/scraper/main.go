@@ -447,7 +447,7 @@ func runScraper(cmd *cobra.Command, args []string) {
 			logVerbose("  Generating artwork...")
 			artworkResult := compositor.GenerateArtwork(romName, artwork.MediaFiles(downloadedFiles), mediaRootDir)
 			for _, err := range artworkResult.Errors {
-				logVerbose("  Warning: %v", err)
+				logInfo("  Warning: %v", err)
 			}
 			logVerbose("  Generated %d artwork files", len(artworkResult.Paths))
 		}

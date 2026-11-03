@@ -359,7 +359,7 @@ The artwork configuration is checked when `config.yaml` is loaded, before any sc
 - **Two outputs write the same folder and format.** They would overwrite each other's files. The error names both outputs; give one of them its own `output_dir` or a different `format`.
 - **A layer uses an unknown resource.** The error names the output and the resource. Use one of the media types listed under [Available Resources](#available-resources) or `custom:<path>`.
 
-A failing output for one game (for example, its first layer's media is missing) does not stop the other outputs; each failure is shown with `--verbose`.
+A failing output for one game (for example, its first layer's media is missing) does not stop the other outputs; each failure is logged as a warning for that game.
 
 ## Troubleshooting
 

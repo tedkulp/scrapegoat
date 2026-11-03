@@ -79,7 +79,7 @@ func (c *Compositor) outputPath(def OutputDefinition, romName, mediaRoot string)
 }
 
 // generateOutput generates a single output image
-func (c *Compositor) generateOutput(gameName string, def OutputDefinition, mediaFiles MediaFiles, outputPath string) error {
+func (c *Compositor) generateOutput(romName string, def OutputDefinition, mediaFiles MediaFiles, outputPath string) error {
 	// Check if we have at least the first layer's media file
 	if len(def.Layers) == 0 {
 		return fmt.Errorf("no layers defined in output")
@@ -95,7 +95,7 @@ func (c *Compositor) generateOutput(gameName string, def OutputDefinition, media
 	// Additional layers are optional - we'll skip them if media is missing
 
 	// Check cache first
-	cacheKey := c.calculateCacheKey(gameName, def, mediaFiles)
+	cacheKey := c.calculateCacheKey(romName, def, mediaFiles)
 	cachedPath, found := c.checkCache(cacheKey, def.fileFormat())
 	if found {
 		c.logVerbose("Cache hit for '%s'", def.Type)
@@ -223,12 +223,9 @@ func (c *Compositor) calculateCacheKey(romName string, def OutputDefinition, med
 	field(fmt.Sprintf("%s|%d|%d|%s", def.Type, def.Width, def.Height, def.Background))
 
 	// fmt prints maps (effect params) with sorted keys, so this is deterministic.
-	for _, layer := range def.Layers {
-		field(fmt.Sprintf("%+v", layer))
-	}
-
 	used := make(map[string]bool)
 	for _, layer := range def.Layers {
+		field(fmt.Sprintf("%+v", layer))
 		if _, ok := mediaFiles[layer.Resource]; ok {
 			used[layer.Resource] = true
 		}

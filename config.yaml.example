@@ -66,9 +66,9 @@ output:
 #               softness: 10
 #               opacity: 50
 #
-#     # Example: Composite with blurred background and cover overlay
-#     - type: composite
-#       output_dir: "composites"  # Per-output folder (overrides artwork.output_dir)
+#     # Example: Framed screenshot with blurred background and box art overlay
+#     - type: framed
+#       output_dir: "framed"  # Per-output folder (overrides artwork.output_dir)
 #       width: 800
 #       height: 600
 #       background: "#1a1a1a"
