@@ -38,10 +38,15 @@ output:
 # Generate custom composed artwork from downloaded media files
 # artwork:
 #   enabled: false  # Set to true to enable artwork generation
-#   output_dir: "artwork"  # Subdirectory for generated artwork (relative to media-root-dir)
+#   output_dir: "artwork"  # Default folder for generated artwork (relative to media-root-dir)
 #   resources_dir: "~/.scrapegoat/resources"  # Directory for custom images (frames, masks, etc.)
 #
-#   # Define output types - each generates one image per game
+#   # Define outputs - each generates one image per ROM, written to
+#   # <media-root-dir>/<output_dir>/<rom-name>.<format>. Two outputs may not
+#   # write the same format to the same folder; give each its own output_dir.
+#   # Layer resources are media types (screenshots, titlescreens, box2dfront,
+#   # 3dboxes, backcovers, wheel, physicalmedia, manuals, videos) or
+#   # custom:<path> for an image in resources_dir.
 #   outputs:
 #     # Example: Enhanced screenshot with rounded corners and shadow
 #     - type: screenshot
@@ -50,7 +55,7 @@ output:
 #       format: png
 #       background: "#000000"
 #       layers:
-#         - resource: screenshot
+#         - resource: screenshots
 #           align: center
 #           valign: middle
 #           effects:
@@ -63,12 +68,13 @@ output:
 #
 #     # Example: Composite with blurred background and cover overlay
 #     - type: composite
+#       output_dir: "composites"  # Per-output folder (overrides artwork.output_dir)
 #       width: 800
 #       height: 600
 #       background: "#1a1a1a"
 #       layers:
 #         # Blurred background
-#         - resource: screenshot
+#         - resource: screenshots
 #           width: 100%
 #           height: 100%
 #           effects:
@@ -77,7 +83,7 @@ output:
 #             - type: opacity
 #               value: 30
 #         # Main screenshot
-#         - resource: screenshot
+#         - resource: screenshots
 #           width: 60%
 #           align: center
 #           valign: middle
@@ -89,7 +95,7 @@ output:
 #               color: "#FFFFFF"
 #               opacity: 100
 #         # Cover in corner
-#         - resource: cover
+#         - resource: box2dfront
 #           height: 40%
 #           x: -20
 #           y: -20

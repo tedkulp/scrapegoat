@@ -9,6 +9,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -41,52 +42,67 @@ func (c *Compositor) logVerbose(format string, args ...interface{}) {
 	}
 }
 
-// GenerateArtwork generates artwork for a game
-func (c *Compositor) GenerateArtwork(gameName string, mediaFiles MediaFiles, outputDir string) (map[string]string, error) {
-	generatedFiles := make(map[string]string)
+// Result is what GenerateArtwork produced for one ROM: the path of every
+// artwork output that was written, in output order, and one error per
+// artwork output that failed.
+type Result struct {
+	Paths  []string
+	Errors []error
+}
 
-	c.logVerbose("Generating %d output(s) for %s", len(c.config.Outputs), gameName)
+// GenerateArtwork composes every artwork output for one ROM. Each output is
+// written to <mediaRoot>/<dir>/<romName>.<format>, where <dir> is the
+// output's own output_dir or the global artwork output_dir. A failing output
+// does not stop the others.
+func (c *Compositor) GenerateArtwork(romName string, mediaFiles MediaFiles, mediaRoot string) Result {
+	var result Result
+
+	c.logVerbose("Generating %d output(s) for %s", len(c.config.Outputs), romName)
 
 	for _, output := range c.config.Outputs {
 		c.logVerbose("Processing output '%s' (%dx%d)", output.Type, output.Width, output.Height)
-		outputPath, err := c.generateOutput(gameName, output, mediaFiles, outputDir)
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate '%s' artwork: %v", output.Type, err)
+		outputPath := c.outputPath(output, romName, mediaRoot)
+		if err := c.generateOutput(romName, output, mediaFiles, outputPath); err != nil {
+			result.Errors = append(result.Errors, fmt.Errorf("artwork output '%s': %w", output.Type, err))
+			continue
 		}
-		c.logVerbose("Generated: %s", filepath.Base(outputPath))
-		generatedFiles[output.Type] = outputPath
+		c.logVerbose("Generated: %s", outputPath)
+		result.Paths = append(result.Paths, outputPath)
 	}
 
-	return generatedFiles, nil
+	return result
+}
+
+// outputPath is the one naming rule for artwork: <mediaRoot>/<dir>/<rom>.<format>.
+func (c *Compositor) outputPath(def OutputDefinition, romName, mediaRoot string) string {
+	return filepath.Join(mediaRoot, c.config.outputDirFor(def), romName+"."+def.fileFormat())
 }
 
 // generateOutput generates a single output image
-func (c *Compositor) generateOutput(gameName string, def OutputDefinition, mediaFiles MediaFiles, outputDir string) (string, error) {
+func (c *Compositor) generateOutput(gameName string, def OutputDefinition, mediaFiles MediaFiles, outputPath string) error {
 	// Check if we have at least the first layer's media file
 	if len(def.Layers) == 0 {
-		return "", fmt.Errorf("no layers defined in output")
+		return fmt.Errorf("no layers defined in output")
 	}
 
 	// Validate first layer exists - this is required
 	firstLayerResource := def.Layers[0].Resource
-	if !strings.HasPrefix(firstLayerResource, "custom:") {
+	if !strings.HasPrefix(firstLayerResource, CustomResourcePrefix) {
 		if _, ok := mediaFiles[firstLayerResource]; !ok {
-			return "", fmt.Errorf("first layer media file not found: %s", firstLayerResource)
+			return fmt.Errorf("first layer media file not found: %s", firstLayerResource)
 		}
 	}
 	// Additional layers are optional - we'll skip them if media is missing
 
 	// Check cache first
 	cacheKey := c.calculateCacheKey(gameName, def, mediaFiles)
-	cachedPath, found := c.checkCache(cacheKey, def.Format)
+	cachedPath, found := c.checkCache(cacheKey, def.fileFormat())
 	if found {
 		c.logVerbose("Cache hit for '%s'", def.Type)
-		// Copy from cache to output directory
-		outputPath := filepath.Join(outputDir, fmt.Sprintf("%s-%s.%s", gameName, def.Type, def.Format))
 		if err := copyFile(cachedPath, outputPath); err != nil {
-			return "", fmt.Errorf("failed to copy from cache: %v", err)
+			return fmt.Errorf("failed to copy from cache: %v", err)
 		}
-		return outputPath, nil
+		return nil
 	}
 	c.logVerbose("Cache miss - generating new artwork")
 
@@ -98,7 +114,7 @@ func (c *Compositor) generateOutput(gameName string, def OutputDefinition, media
 		if len(def.Layers) > 0 {
 			img, err := loadLayerImage(def.Layers[0].Resource, mediaFiles, c.resourcesDir)
 			if err != nil {
-				return "", fmt.Errorf("failed to load first layer for auto-sizing: %v", err)
+				return fmt.Errorf("failed to load first layer for auto-sizing: %v", err)
 			}
 			if width == 0 {
 				width = img.Bounds().Dx()
@@ -107,14 +123,14 @@ func (c *Compositor) generateOutput(gameName string, def OutputDefinition, media
 				height = img.Bounds().Dy()
 			}
 		} else {
-			return "", fmt.Errorf("output dimensions required when no layers are defined")
+			return fmt.Errorf("output dimensions required when no layers are defined")
 		}
 	}
 
 	// Create canvas with background
 	canvas, err := c.createCanvas(width, height, def.Background)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	// Process and composite each layer
@@ -122,11 +138,11 @@ func (c *Compositor) generateOutput(gameName string, def OutputDefinition, media
 		c.logVerbose("Layer %d: resource=%s", i+1, layerDef.Resource)
 
 		// Check if media file exists for this layer (skip if missing, except for first layer)
-		if !strings.HasPrefix(layerDef.Resource, "custom:") {
+		if !strings.HasPrefix(layerDef.Resource, CustomResourcePrefix) {
 			if _, ok := mediaFiles[layerDef.Resource]; !ok {
 				if i == 0 {
 					// First layer is required
-					return "", fmt.Errorf("first layer media file not found: %s", layerDef.Resource)
+					return fmt.Errorf("first layer media file not found: %s", layerDef.Resource)
 				}
 				// Skip optional layers if media is missing
 				c.logVerbose("Skipping layer %d - media not found", i+1)
@@ -138,7 +154,7 @@ func (c *Compositor) generateOutput(gameName string, def OutputDefinition, media
 		if err != nil {
 			if i == 0 {
 				// First layer errors are fatal
-				return "", fmt.Errorf("failed to process first layer: %v", err)
+				return fmt.Errorf("failed to process first layer: %v", err)
 			}
 			// Skip optional layers that fail to process
 			c.logVerbose("Skipping layer %d - processing failed: %v", i+1, err)
@@ -160,21 +176,17 @@ func (c *Compositor) generateOutput(gameName string, def OutputDefinition, media
 	}
 
 	// Save to cache
-	cachedPath, err = c.saveToCache(canvas, cacheKey, def.Format)
+	cachedPath, err = c.saveToCache(canvas, cacheKey, def.fileFormat())
 	if err != nil {
-		return "", fmt.Errorf("failed to save to cache: %v", err)
+		return fmt.Errorf("failed to save to cache: %v", err)
 	}
 
-	// Copy from cache to output directory
-	// Use just the game name without the output type suffix for EmulationStation compatibility
-	outputPath := filepath.Join(outputDir, fmt.Sprintf("%s.%s", gameName, def.Format))
 	if err := copyFile(cachedPath, outputPath); err != nil {
-		return "", fmt.Errorf("failed to copy to output: %v", err)
+		return fmt.Errorf("failed to copy to output: %v", err)
 	}
 
-	return outputPath, nil
+	return nil
 }
-
 
 // createCanvas creates a new canvas with the specified background
 func (c *Compositor) createCanvas(width, height int, background string) (*image.NRGBA, error) {
@@ -196,28 +208,45 @@ func (c *Compositor) createCanvas(width, height int, background string) (*image.
 	return canvas, nil
 }
 
-// calculateCacheKey generates a cache key for an output
-func (c *Compositor) calculateCacheKey(gameName string, def OutputDefinition, mediaFiles MediaFiles) string {
+// calculateCacheKey generates a cache key for an output. It covers the ROM
+// name, the output definition and, for each media file the output's layers
+// use, its media type, path and modification time, in sorted order, so the
+// same inputs give the same key on every run.
+func (c *Compositor) calculateCacheKey(romName string, def OutputDefinition, mediaFiles MediaFiles) string {
 	h := md5.New()
-
-	// Include game name
-	h.Write([]byte(gameName))
-
-	// Include output definition (simplified - just the type and dimensions)
-	h.Write([]byte(fmt.Sprintf("%s-%d-%d-%s", def.Type, def.Width, def.Height, def.Background)))
-
-	// Include media file paths and their modification times
-	for resource, path := range mediaFiles {
-		h.Write([]byte(resource))
-		h.Write([]byte(path))
-		if info, err := os.Stat(path); err == nil {
-			h.Write([]byte(info.ModTime().String()))
-		}
+	field := func(s string) {
+		h.Write([]byte(s))
+		h.Write([]byte{0})
 	}
 
-	// Include layer and effect configuration
+	field(romName)
+	field(fmt.Sprintf("%s|%d|%d|%s", def.Type, def.Width, def.Height, def.Background))
+
+	// fmt prints maps (effect params) with sorted keys, so this is deterministic.
 	for _, layer := range def.Layers {
-		h.Write([]byte(fmt.Sprintf("%+v", layer)))
+		field(fmt.Sprintf("%+v", layer))
+	}
+
+	used := make(map[string]bool)
+	for _, layer := range def.Layers {
+		if _, ok := mediaFiles[layer.Resource]; ok {
+			used[layer.Resource] = true
+		}
+	}
+	mediaTypes := make([]string, 0, len(used))
+	for mediaType := range used {
+		mediaTypes = append(mediaTypes, mediaType)
+	}
+	sort.Strings(mediaTypes)
+	for _, mediaType := range mediaTypes {
+		path := mediaFiles[mediaType]
+		field(mediaType)
+		field(path)
+		if info, err := os.Stat(path); err == nil {
+			field(fmt.Sprintf("%d", info.ModTime().UnixNano()))
+		} else {
+			field("")
+		}
 	}
 
 	return fmt.Sprintf("%x", h.Sum(nil))
