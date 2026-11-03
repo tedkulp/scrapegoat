@@ -12,7 +12,7 @@ help:
 ## build: Build the scrapegoat binary
 build:
 	@echo "Building scrapegoat..."
-	go build -o scrapegoat cmd/scraper/main.go
+	go build -o scrapegoat ./cmd/scraper
 	@echo "Build complete: ./scrapegoat"
 
 ## clean: Remove built binaries and cache

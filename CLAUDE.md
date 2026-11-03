@@ -10,7 +10,7 @@ Scrapegoat is a ROM scraper for EmulationStation that uses the ScreenScraper.fr 
 
 ```bash
 # Build the binary
-go build -o scrapegoat cmd/scraper/main.go
+go build -o scrapegoat ./cmd/scraper
 
 # List available platforms
 ./scrapegoat list-platforms

@@ -49,7 +49,7 @@ Releases include archives for Linux, macOS and Windows (x86_64 and arm64): https
 ```bash
 git clone https://github.com/tedkulp/scrapegoat.git
 cd scrapegoat
-make build    # same as: go build -o scrapegoat cmd/scraper/main.go
+make build    # same as: go build -o scrapegoat ./cmd/scraper
 ```
 
 Run `make help` to see all targets (`test`, `lint`, `install`, ...).
