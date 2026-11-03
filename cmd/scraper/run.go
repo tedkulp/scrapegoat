@@ -8,7 +8,7 @@ import (
 	"github.com/tedkulp/scrapegoat/internal/metadata"
 	"github.com/tedkulp/scrapegoat/internal/scanner"
 	"github.com/tedkulp/scrapegoat/internal/scrape"
-	"github.com/tedkulp/scrapegoat/internal/scraper"
+	"github.com/tedkulp/scrapegoat/internal/screenscraper"
 )
 
 // romScraper scrapes one ROM. *scrape.Scraper satisfies it.
@@ -27,7 +27,7 @@ type romLoop struct {
 	// are carried over from.
 	gamelistPath string
 	// quota reports the latest known quota, printed after each scraped ROM.
-	quota  func() scraper.Quota
+	quota  func() screenscraper.Quota
 	report func([]reportLine)
 
 	existing     *metadata.Existing

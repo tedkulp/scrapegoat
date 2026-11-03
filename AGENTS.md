@@ -4,7 +4,7 @@
 
 - **Build**: `make build` or `go build -o scrapegoat cmd/scraper/main.go`
 - **Test all**: `make test` or `go test -v -race -coverprofile=coverage.out ./...`
-- **Test single package**: `go test -v ./internal/scraper`
+- **Test single package**: `go test -v ./internal/screenscraper`
 - **Test single function**: `go test -v -run TestFunctionName ./path/to/package`
 - **Format code**: `make fmt` or `go fmt ./...`
 - **Lint**: `make lint` (requires golangci-lint) or `go vet ./...`
@@ -43,5 +43,5 @@
 - File paths use `filepath` package, always handle both absolute and relative paths
 - Media downloads use worker pool pattern with channels
 - Cache uses JSON files in `~/.scrapegoat/` with MD5-based filenames
-- ZIP files are extracted in-memory for hashing (see `internal/scraper/hasher.go:72-144`)
-- Prefer region/language fallback patterns (see `internal/scraper/types.go:103-190`)
+- ZIP files are extracted in-memory for hashing (see `internal/screenscraper/hasher.go:72-144`)
+- Prefer region/language fallback patterns (see `internal/screenscraper/types.go:103-190`)

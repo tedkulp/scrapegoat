@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tedkulp/scrapegoat/internal/scraper"
+	"github.com/tedkulp/scrapegoat/internal/screenscraper"
 )
 
 const existingGamelist = `<?xml version="1.0" encoding="UTF-8"?>
@@ -40,7 +40,7 @@ func TestCarryOver_KeepsDeferredEntriesUnchangedAndWritesNewOnes(t *testing.T) {
 		t.Fatalf("ReadExisting: %v", err)
 	}
 	gen := NewGenerator(dir, dir)
-	gen.AddGameFromScraper("/roms/Scraped.nes", &scraper.Game{Names: []scraper.Name{{Region: "us", Text: "New Name"}}})
+	gen.AddGameFromScraper("/roms/Scraped.nes", &screenscraper.Game{Names: []screenscraper.Name{{Region: "us", Text: "New Name"}}})
 	if !gen.CarryOver(existing, "/roms/Deferred.nes") {
 		t.Error("CarryOver found no entry for Deferred.nes")
 	}

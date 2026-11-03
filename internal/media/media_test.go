@@ -13,13 +13,13 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/tedkulp/scrapegoat/internal/scraper"
+	"github.com/tedkulp/scrapegoat/internal/screenscraper"
 )
 
 func TestPlan_PicksOneFilePerTypeByRegionPreference(t *testing.T) {
 	root, cache := t.TempDir(), t.TempDir()
 	p := New(cache, "nes", root, 2)
-	game := &scraper.Game{Medias: []scraper.Media{
+	game := &screenscraper.Game{Medias: []screenscraper.Media{
 		{Type: "ss", Region: "jp", Format: "png", URL: "http://x/ss-jp"},
 		{Type: "ss", Region: "eu", Format: "png", URL: "http://x/ss-eu"},
 		{Type: "ss", Region: "wor", Format: "png", URL: "http://x/ss-wor"},
@@ -75,9 +75,9 @@ func TestPlan_MapsEveryScreenScraperType(t *testing.T) {
 		"video":       "videos",
 		"support-2D":  "physicalmedia",
 	}
-	game := &scraper.Game{}
+	game := &screenscraper.Game{}
 	for ssType := range mapping {
-		game.Medias = append(game.Medias, scraper.Media{Type: ssType, Region: "us", Format: "png", URL: "http://x/" + ssType})
+		game.Medias = append(game.Medias, screenscraper.Media{Type: ssType, Region: "us", Format: "png", URL: "http://x/" + ssType})
 	}
 	plan := p.Plan(game, "g.nes", Mode{})
 	if len(plan.Items) != len(mapping) {
@@ -177,7 +177,7 @@ func assertNotExist(t *testing.T, path string) {
 func TestExecute_MixedPlanCounts(t *testing.T) {
 	f := newFixture(t)
 	f.bodies["box-2D(us)"] = "fresh box"
-	game := &scraper.Game{Medias: []scraper.Media{
+	game := &screenscraper.Game{Medias: []screenscraper.Media{
 		{Type: "wheel", Region: "us", Format: "png", URL: f.url("42", "wheel(us)")},
 		{Type: "ss", Region: "us", Format: "png", URL: f.url("42", "ss(us)")},
 		{Type: "box-2D", Region: "us", Format: "png", URL: f.url("42", "box-2D(us)")},
@@ -226,8 +226,8 @@ func TestExecute_MixedPlanCounts(t *testing.T) {
 	assertNotExist(t, f.cachePath("videos", "Game.mp4"))
 }
 
-func ssGame(url string) *scraper.Game {
-	return &scraper.Game{Medias: []scraper.Media{{Type: "ss", Region: "us", Format: "png", URL: url}}}
+func ssGame(url string) *screenscraper.Game {
+	return &screenscraper.Game{Medias: []screenscraper.Media{{Type: "ss", Region: "us", Format: "png", URL: url}}}
 }
 
 func TestExecute_ForceRefetchesOverMediaRootAndCache(t *testing.T) {
@@ -276,7 +276,7 @@ func TestPlan_DryRunMatchesRealRunWithoutRequestsOrWrites(t *testing.T) {
 		t.Run(fmt.Sprintf("force=%v", force), func(t *testing.T) {
 			f := newFixture(t)
 			f.bodies["box-2D(us)"] = "box"
-			game := &scraper.Game{Medias: []scraper.Media{
+			game := &screenscraper.Game{Medias: []screenscraper.Media{
 				{Type: "wheel", Region: "us", Format: "png", URL: f.url("42", "wheel(us)")},
 				{Type: "ss", Region: "us", Format: "png", URL: f.url("42", "ss(us)")},
 				{Type: "sstitle", Region: "us", Format: "png", URL: f.url("42", "sstitle(us)")},
@@ -437,7 +437,7 @@ func TestExecute_SidecarHoldsNoCredentialsOrHost(t *testing.T) {
 	f.bodies["ss(us)"] = "ss"
 	f.bodies["wheel(us)"] = "wheel"
 	writeFile(t, f.cachePath("screenshots", "Game.png"), "cached") // adopted
-	game := &scraper.Game{Medias: []scraper.Media{
+	game := &screenscraper.Game{Medias: []screenscraper.Media{
 		{Type: "ss", Region: "us", Format: "png", URL: f.url("42", "ss(us)")},
 		{Type: "wheel", Region: "us", Format: "png", URL: f.url("42", "wheel(us)")}, // downloaded
 	}}

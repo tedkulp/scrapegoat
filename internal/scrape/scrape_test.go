@@ -18,7 +18,7 @@ import (
 	"github.com/tedkulp/scrapegoat/internal/cutoff"
 	"github.com/tedkulp/scrapegoat/internal/media"
 	"github.com/tedkulp/scrapegoat/internal/scanner"
-	"github.com/tedkulp/scrapegoat/internal/scraper"
+	"github.com/tedkulp/scrapegoat/internal/screenscraper"
 )
 
 const systemID = 3
@@ -26,15 +26,15 @@ const systemID = 3
 // fakeLookup answers every lookup with a fixed result and error, and records
 // what it was asked.
 type fakeLookup struct {
-	result   scraper.LookupResult
+	result   screenscraper.LookupResult
 	err      error
 	calls    int
 	systemID int
 	romName  string
-	hashes   *scraper.ROMHashes
+	hashes   *screenscraper.ROMHashes
 }
 
-func (f *fakeLookup) Lookup(systemID int, romName string, hashes *scraper.ROMHashes) (scraper.LookupResult, error) {
+func (f *fakeLookup) Lookup(systemID int, romName string, hashes *screenscraper.ROMHashes) (screenscraper.LookupResult, error) {
 	f.calls++
 	f.systemID, f.romName, f.hashes = systemID, romName, hashes
 	return f.result, f.err
@@ -92,11 +92,11 @@ func (e *env) mediaURL(m string) string {
 	return e.srv.URL + "/api2/mediaJeu.php?devid=d&devpassword=p&systemeid=3&jeuid=42&media=" + m
 }
 
-func (e *env) game() *scraper.Game {
-	return &scraper.Game{
+func (e *env) game() *screenscraper.Game {
+	return &screenscraper.Game{
 		ID:    "42",
-		Names: []scraper.Name{{Region: "us", Text: "Super Game"}},
-		Medias: []scraper.Media{
+		Names: []screenscraper.Name{{Region: "us", Text: "Super Game"}},
+		Medias: []screenscraper.Media{
 			{Type: "ss", Region: "us", Format: "png", URL: e.mediaURL("ss(us)")},
 			{Type: "box-2D", Region: "us", Format: "png", URL: e.mediaURL("box-2D(us)")},
 		},
@@ -120,7 +120,7 @@ func files(t *testing.T, dir string) []string {
 func TestScrape_MatchIsScrapedWithMediaPlacedAndArtworkComposed(t *testing.T) {
 	e := newEnv(t)
 	game := e.game()
-	lookup := &fakeLookup{result: scraper.LookupResult{Outcome: scraper.OutcomeMatch, Game: game}}
+	lookup := &fakeLookup{result: screenscraper.LookupResult{Outcome: screenscraper.OutcomeMatch, Game: game}}
 	s := New(lookup, e.placer(), e.compositor(), systemID, media.Mode{})
 
 	rom := e.rom("Super Game (USA).nes", "rom bytes")
@@ -168,7 +168,7 @@ func TestScrape_DryRunReturnsScrapedWithPlanAndWritesNothing(t *testing.T) {
 	}
 	cacheBefore := files(t, e.cacheDir)
 
-	lookup := &fakeLookup{result: scraper.LookupResult{Outcome: scraper.OutcomeMatch, Game: e.game()}}
+	lookup := &fakeLookup{result: screenscraper.LookupResult{Outcome: screenscraper.OutcomeMatch, Game: e.game()}}
 	s := New(lookup, e.placer(), e.compositor(), systemID, media.Mode{DryRun: true})
 
 	res, err := s.Scrape(e.rom("Super Game (USA).nes", "rom bytes"))
@@ -208,7 +208,7 @@ func TestScrape_DryRunWithForcePlansLikeARealRunWithForce(t *testing.T) {
 			os.MkdirAll(filepath.Dir(p), 0o755)
 			os.WriteFile(p, []byte("old"), 0o644)
 		}
-		lookup := &fakeLookup{result: scraper.LookupResult{Outcome: scraper.OutcomeMatch, Game: e.game()}}
+		lookup := &fakeLookup{result: screenscraper.LookupResult{Outcome: screenscraper.OutcomeMatch, Game: e.game()}}
 		s := New(lookup, e.placer(), nil, systemID, media.Mode{DryRun: dry, Force: true})
 		res, err := s.Scrape(e.rom("Super Game (USA).nes", "rom bytes"))
 		if err != nil {
@@ -237,7 +237,7 @@ func TestScrape_DryRunWithForcePlansLikeARealRunWithForce(t *testing.T) {
 func TestScrape_NotFoundReportsWhetherCached(t *testing.T) {
 	for _, cached := range []bool{false, true} {
 		e := newEnv(t)
-		lookup := &fakeLookup{result: scraper.LookupResult{Outcome: scraper.OutcomeNotFound, Cached: cached}}
+		lookup := &fakeLookup{result: screenscraper.LookupResult{Outcome: screenscraper.OutcomeNotFound, Cached: cached}}
 		s := New(lookup, e.placer(), e.compositor(), systemID, media.Mode{})
 
 		res, err := s.Scrape(e.rom("Unknown.nes", "mystery"))
@@ -261,7 +261,7 @@ func TestScrape_NotFoundReportsWhetherCached(t *testing.T) {
 
 func TestScrape_HashFailureRecordsHashStage(t *testing.T) {
 	e := newEnv(t)
-	lookup := &fakeLookup{result: scraper.LookupResult{Outcome: scraper.OutcomeMatch, Game: e.game()}}
+	lookup := &fakeLookup{result: screenscraper.LookupResult{Outcome: screenscraper.OutcomeMatch, Game: e.game()}}
 	s := New(lookup, e.placer(), e.compositor(), systemID, media.Mode{})
 
 	missing := scanner.ROMFile{Path: filepath.Join(e.romDir, "gone.nes"), Filename: "gone.nes"}
@@ -332,8 +332,8 @@ func TestScrape_LookupFailureRecordsLookupStageAndError(t *testing.T) {
 func TestScrape_NonGameCarriesTheGameAndPlacesNothing(t *testing.T) {
 	e := newEnv(t)
 	game := e.game()
-	game.Names = []scraper.Name{{Region: "wor", Text: "ZZZ(notgame):#NONGAME"}}
-	lookup := &fakeLookup{result: scraper.LookupResult{Outcome: scraper.OutcomeNonGame, Game: game, Cached: true}}
+	game.Names = []screenscraper.Name{{Region: "wor", Text: "ZZZ(notgame):#NONGAME"}}
+	lookup := &fakeLookup{result: screenscraper.LookupResult{Outcome: screenscraper.OutcomeNonGame, Game: game, Cached: true}}
 	s := New(lookup, e.placer(), e.compositor(), systemID, media.Mode{})
 
 	res, err := s.Scrape(e.rom("BIOS.nes", "bios"))

@@ -8,15 +8,15 @@ import (
 	"time"
 
 	"github.com/tedkulp/scrapegoat/internal/platform"
-	"github.com/tedkulp/scrapegoat/internal/scraper"
+	"github.com/tedkulp/scrapegoat/internal/screenscraper"
 )
 
 type countingSource struct {
-	systems []scraper.System
+	systems []screenscraper.System
 	calls   int
 }
 
-func (s *countingSource) GetSystemsList() ([]scraper.System, error) {
+func (s *countingSource) GetSystemsList() ([]screenscraper.System, error) {
 	s.calls++
 	return s.systems, nil
 }
@@ -32,12 +32,12 @@ func testCatalog(src platform.SystemsSource, dir string) *platform.Catalog {
 	})
 }
 
-func sys(id int, name string) scraper.System {
-	return scraper.System{ID: id, Names: []scraper.Name{{Region: "us", Text: name}}}
+func sys(id int, name string) screenscraper.System {
+	return screenscraper.System{ID: id, Names: []screenscraper.Name{{Region: "us", Text: name}}}
 }
 
 func TestListPlatforms_EverySlugResolvesToItsRow(t *testing.T) {
-	src := &countingSource{systems: []scraper.System{
+	src := &countingSource{systems: []screenscraper.System{
 		sys(3, "Nintendo Entertainment System,NES,Famicom"),
 		sys(26, "Atari2600,A2600,2600"),
 		sys(42, "Atari ST,Atari STE,520 ST"),
@@ -85,7 +85,7 @@ func TestListPlatforms_EverySlugResolvesToItsRow(t *testing.T) {
 
 func TestListPlatforms_FreshCacheMakesNoRequest(t *testing.T) {
 	dir := t.TempDir()
-	first := &countingSource{systems: []scraper.System{sys(3, "NES")}}
+	first := &countingSource{systems: []screenscraper.System{sys(3, "NES")}}
 	if err := listPlatforms(&bytes.Buffer{}, testCatalog(first, dir)); err != nil {
 		t.Fatal(err)
 	}
