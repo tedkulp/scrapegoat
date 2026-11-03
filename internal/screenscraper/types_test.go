@@ -1,7 +1,8 @@
-package scraper
+package screenscraper
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 )
 
@@ -54,5 +55,20 @@ func TestUserInfoDecodesQuotaFieldsFromSSUserInfos(t *testing.T) {
 		if c.got != c.want {
 			t.Errorf("%s = %q, want %q", c.name, c.got, c.want)
 		}
+	}
+}
+
+func TestDefaultRegionsOrder(t *testing.T) {
+	want := []string{"us", "wor", "eu", "jp"}
+	if got := DefaultRegions(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("DefaultRegions() = %v, want %v", got, want)
+	}
+}
+
+func TestDefaultRegionsReturnsFreshSlice(t *testing.T) {
+	first := DefaultRegions()
+	first[0] = "changed"
+	if got := DefaultRegions()[0]; got != "us" {
+		t.Fatalf("mutating one result changed the default: first region = %q", got)
 	}
 }

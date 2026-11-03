@@ -54,7 +54,7 @@ Check that the credentials work:
 ```
 
 > [!WARNING]
-> At the end of a run, Scrapegoat lists the ROMs it could not match and **asks whether to delete them**. Add `--auto-delete=false` to keep them without being asked.
+> At the end of a run, Scrapegoat lists the ROMs it could not match and **asks whether to delete them**. Add `--auto-delete=false` to keep them without being asked. If your daily quota runs out mid-run, the remaining ROMs are deferred to the next run, not offered for deletion, and `scrape` exits with status 1.
 
 ## 5. Results
 
@@ -75,7 +75,7 @@ Platform slugs you can use with `--platform`:
 - `psx` - PlayStation
 - `gb` / `gbc` / `gba` - Game Boy, Game Boy Color, Game Boy Advance
 
-Platforms are fetched from ScreenScraper automatically. Run `./scrapegoat list-platforms` to see every slug.
+Platforms are fetched from ScreenScraper automatically and cached in `~/.scrapegoat/platforms.json`. Run `./scrapegoat list-platforms` to see every slug; slugs are not case-sensitive, and most platforms have several (one per name ScreenScraper gives it), so `famicom` picks the same platform as `nes`.
 
 ## Tips
 

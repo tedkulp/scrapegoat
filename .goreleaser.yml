@@ -5,7 +5,7 @@ before:
     - go mod tidy
 
 builds:
-  - main: ./cmd/scraper/main.go
+  - main: ./cmd/scraper
     binary: scrapegoat
     env:
       - CGO_ENABLED=0

@@ -5,11 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tedkulp/scrapegoat/internal/scraper"
+	"github.com/tedkulp/scrapegoat/internal/screenscraper"
 )
 
 func TestQuotaLinesShowsPerMinuteAndFailedRequestQuota(t *testing.T) {
-	u := &scraper.UserInfo{
+	u := &screenscraper.UserInfo{
 		RequestsToday:        "42",
 		MaxRequestsPerDay:    "20000",
 		MaxRequestsPerMinute: "3072",

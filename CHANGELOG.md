@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `scrape` skips media files that already exist in the destination, and `--dry-run` reports how many would be downloaded and how many already exist. `--force-redownload` downloads them all again.
 - `user-info` shows the per-minute request limit and the failed-request quota (`Failed Requests Today: used / max`).
 - An MIT `LICENSE` file.
+- When ScreenScraper cuts a run off (bad developer credentials 403, API closed 423, software blacklisted 426, daily quota 430 or failed-request quota 431, from a lookup or a media download), `scrape` stops sending requests and prints one line naming the cause. Remaining ROMs are answered from the game cache, expired entries included; ROMs with no entry are deferred to the next run. Media already in the media cache is still placed.
 
 ### Changed
 
@@ -19,13 +20,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A ROM ScreenScraper answers with 404 counts as not found and is cached like any other not-found result, so re-runs don't look it up again until `--cache-hours` passes.
 - The 1-second wait applies between HTTP requests to ScreenScraper, not after every ROM, so ROMs answered from the cache no longer wait.
 - The remaining-quota count shown during `scrape` also updates from the platform list request.
+- `--force-redownload` also skips the media cache, so every media file is fetched from ScreenScraper again (and counts against the daily quota). `--dry-run` applies it too, and reports how many files would come from the media cache.
+- A failed media download is always reported, and the `Media:` line counts it as failed. It does not fail the ROM.
+- `--auto-delete` and `--artwork` accept `1`/`0` (any `strconv.ParseBool` value) as well as `true`/`false`. An unrecognised value, or `--cache-hours` of 0 or less, now stops the run with an error naming the flag instead of being silently ignored.
+- `{platform}` is expanded in `output.cache_dir` from the config file, not only in flag paths.
+- The end-of-run list says "Unmatched" instead of "Failed": `=== Unmatched ROMs ===`.
+- `scrape` exits with status 1 after a cutoff, once `gamelist.xml` is written. The summary adds `Deferred: N` and the cause.
+- The run summary counts each scrape outcome separately: `Scraped: N`, `Not found: N`, `Non-game: N` and `Failed: N` (a ROM that could not be hashed or looked up), instead of `Successful` and one combined count. "Average API calls per ROM" divides by the scraped count.
+- `--verbose` no longer prints the "Computing hashes...", "Querying ScreenScraper API...", "Placing N media files..." and "Generating artwork..." progress lines; the hashes, media and artwork lines that follow each step are unchanged.
+- Platform slugs follow one set of rules for `--platform` and `list-platforms`: one slug per platform name, the lower platform ID wins a shared slug, aliases beat name slugs, and `config.yaml` platforms beat both. Every slug `list-platforms` shows picks that row's platform. The long joined-up slugs made from all of a platform's names (such as `atari2600a26002600`) are gone.
+- `list-platforms` reads the cached `platforms.json` instead of calling the API every time, and also lists `config.yaml` platforms, marked `(config)`.
+- `config.yaml` platform slugs are matched without regard to case, like ScreenScraper's.
+- The scrape log names the platform by its first name, e.g. `Platform: Atari ST (ID: 42)`, instead of the full comma-separated list.
+- `platforms.json` now stores ScreenScraper's systems list as fetched. A file from an older version is fetched again once.
 
 ### Fixed
 
+- A used-up quota (or another cutoff) no longer turns every remaining ROM into an unmatched ROM: with `--auto-delete=true` the run used to delete ROMs that were never looked up. Deferred ROMs are never deleted or offered for deletion.
+- After a cutoff, `gamelist.xml` keeps the existing entries of deferred ROMs instead of dropping them.
 - Game lookups retry up to 3 times again, with 2 s and 4 s backoff, instead of failing on the first error.
 - A ROM cached as not found no longer crashes `scrape`; it is listed with the other unmatched ROMs.
 - `user-info` no longer prints blank per-hour, per-minute and per-second limits.
 - The `--verbose` cache summary shows the actual `--cache-hours` value instead of always saying 12 hours.
+- A cached media file is downloaded again when a lookup now selects a different region or game for it. Each cached file gets a small `.json` sidecar recording which media it is; existing cached files without one are kept and adopted.
+- An interrupted media download no longer leaves a partial file that later runs serve from the cache. An empty cached file is downloaded again.
+- Artwork is always written to `<media-root>/<dir>/<rom-name>.<format>`, whether it was just composed or came from the artwork cache. `<dir>` is the output's new optional `output_dir`, or `artwork.output_dir`. Older runs may have left `<rom-name>-<type>.<format>` files in the artwork folder; they are not removed and can be deleted by hand.
+- The artwork cache key no longer changes between runs, so unchanged artwork is copied from the cache instead of being composed again. Existing artwork cache entries are rebuilt once.
+- Two artwork outputs writing the same format to the same folder, and layer resources that are not a media type or `custom:<path>`, are rejected before scraping when artwork is enabled (`artwork.enabled: true` or `--artwork`), instead of silently overwriting each other or producing no artwork. So is an output whose folder is a media type folder. A disabled artwork section is not checked, so it never stops a command. `config.yaml.example` now uses real media type names.
+- A failing artwork output no longer discards the other outputs for that ROM.
 
 ### Security
 

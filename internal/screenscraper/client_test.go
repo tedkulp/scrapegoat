@@ -1,4 +1,4 @@
-package scraper
+package screenscraper
 
 import (
 	"bytes"
@@ -713,5 +713,20 @@ func Test404OutsideLookupIsAPermanentError(t *testing.T) {
 	}
 	if *calls != 1 {
 		t.Errorf("expected 1 request, got %d", *calls)
+	}
+}
+
+func TestRedactURL(t *testing.T) {
+	got := RedactURL("https://api.screenscraper.fr/api2/mediaJeu.php?devid=d&devpassword=secret1&ssid=u&sspassword=secret2&jeuid=42")
+	if strings.Contains(got, "secret") {
+		t.Fatalf("RedactURL left a password: %s", got)
+	}
+	for _, want := range []string{"devpassword=***", "sspassword=***", "jeuid=42", "mediaJeu.php?"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("RedactURL = %s, missing %q", got, want)
+		}
+	}
+	if got := RedactURL("https://example.com/x?a=1"); got != "https://example.com/x?a=1" {
+		t.Errorf("URL without passwords changed: %s", got)
 	}
 }

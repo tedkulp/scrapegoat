@@ -1,4 +1,4 @@
-package scraper
+package screenscraper
 
 import (
 	"strconv"
@@ -94,6 +94,13 @@ type Publisher struct {
 // Players represents number of players
 type Players struct {
 	Text string `xml:",chardata" json:"text"`
+}
+
+// DefaultRegions returns the default preferred region order (us, wor, eu, jp)
+// used for names, release dates, media and platform names. Each call returns a
+// new slice, so callers may modify it without affecting the default.
+func DefaultRegions() []string {
+	return []string{"us", "wor", "eu", "jp"}
 }
 
 // GetPreferredName returns the game name for the specified region, falling back to others

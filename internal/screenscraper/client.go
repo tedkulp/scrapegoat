@@ -1,4 +1,4 @@
-package scraper
+package screenscraper
 
 import (
 	"encoding/json"
@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/tedkulp/scrapegoat/internal/cutoff"
 )
 
 const (
@@ -80,6 +82,13 @@ func WithThrottle(gap time.Duration) Option {
 	return func(c *Client) { c.throttle = gap }
 }
 
+// WithCutoff shares a run's cutoff with the client. The client trips it on a
+// cutoff status and sends no request once it is tripped, by whoever. Without
+// this option the client keeps a cutoff of its own.
+func WithCutoff(cut *cutoff.Cutoff) Option {
+	return func(c *Client) { c.cutoff = cut }
+}
+
 // WithDebug enables debug logging of lookups and request URLs.
 func WithDebug(debug bool) Option {
 	return func(c *Client) { c.debug = debug }
@@ -98,6 +107,7 @@ type Client struct {
 	debug      bool
 	debugOut   io.Writer
 	throttle   time.Duration
+	cutoff     *cutoff.Cutoff
 
 	mu          sync.Mutex
 	lastRequest time.Time
@@ -121,6 +131,9 @@ func NewClient(creds Credentials, opts ...Option) *Client {
 	}
 	for _, opt := range opts {
 		opt(c)
+	}
+	if c.cutoff == nil {
+		c.cutoff = cutoff.New()
 	}
 	if c.cacheEnabled {
 		c.cache = NewGameCache(c.cacheDir, c.cacheHours, c.clock.Now)
@@ -175,22 +188,17 @@ func outcomeFor(game *Game) Outcome {
 // Lookup asks ScreenScraper (or the local cache of its earlier answers) which
 // game a ROM is. Not found and non-game are outcomes, not errors; an error
 // means no answer could be obtained.
+//
+// After a cutoff, any cache entry answers, however old, and a ROM with no
+// entry gets a *cutoff.Error without a request being sent.
 func (c *Client) Lookup(systemID int, romName string, hashes *ROMHashes) (LookupResult, error) {
-	if c.cache != nil && hashes != nil {
-		cached := c.cache.Get(hashes)
-		if cached.Found {
-			result := LookupResult{Game: cached.Game, Cached: true}
-			switch {
-			case cached.NotFound:
-				result.Outcome = OutcomeNotFound
-			case cached.IsNonGame:
-				result.Outcome = OutcomeNonGame
-			default:
-				result.Outcome = outcomeFor(cached.Game)
-			}
-			c.debugf("Lookup - CACHED (%s)", result.Outcome)
-			return result, nil
-		}
+	tripped := c.cutoff.Tripped()
+	if result, ok := c.cachedLookup(hashes, tripped); ok {
+		return result, nil
+	}
+	if tripped {
+		cause, _ := c.cutoff.Cause()
+		return LookupResult{}, fmt.Errorf("failed to look up game: %w", &cutoff.Error{Cause: cause})
 	}
 
 	params := c.creds.params()
@@ -206,6 +214,12 @@ func (c *Client) Lookup(systemID int, romName string, hashes *ROMHashes) (Lookup
 	var game *Game
 	apiResp, err := getJSONWithRetry[GameInfoJSONResponse](c, "jeuInfos.php", params)
 	if err != nil && !isNotFound(err) {
+		var ce *cutoff.Error
+		if errors.As(err, &ce) {
+			if result, ok := c.cachedLookup(hashes, true); ok {
+				return result, nil
+			}
+		}
 		return LookupResult{}, fmt.Errorf("failed to look up game: %w", err)
 	}
 	if err == nil {
@@ -233,6 +247,34 @@ func (c *Client) Lookup(systemID int, romName string, hashes *ROMHashes) (Lookup
 	}
 
 	return result, nil
+}
+
+// cachedLookup answers a lookup from the game cache. anyAge accepts expired
+// entries.
+func (c *Client) cachedLookup(hashes *ROMHashes, anyAge bool) (LookupResult, bool) {
+	if c.cache == nil || hashes == nil {
+		return LookupResult{}, false
+	}
+	var cached CacheResult
+	if anyAge {
+		cached = c.cache.GetAny(hashes)
+	} else {
+		cached = c.cache.Get(hashes)
+	}
+	if !cached.Found {
+		return LookupResult{}, false
+	}
+	result := LookupResult{Game: cached.Game, Cached: true}
+	switch {
+	case cached.NotFound:
+		result.Outcome = OutcomeNotFound
+	case cached.IsNonGame:
+		result.Outcome = OutcomeNonGame
+	default:
+		result.Outcome = outcomeFor(cached.Game)
+	}
+	c.debugf("Lookup - CACHED (%s)", result.Outcome)
+	return result, true
 }
 
 // Quota returns the quota reported by the most recent ScreenScraper response
@@ -278,14 +320,24 @@ func (c *Client) throttledGet(apiURL string) (*http.Response, error) {
 }
 
 func redactedURL(endpoint string, params url.Values) string {
-	redacted := url.Values{}
-	for k, v := range params {
-		redacted[k] = v
+	return RedactURL(endpointURL(endpoint, params.Encode()))
+}
+
+// RedactURL returns a ScreenScraper URL with its devpassword and sspassword
+// values replaced by ***, for logging.
+func RedactURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "<unparseable URL>"
 	}
-	redacted.Set("devpassword", "***")
-	redacted.Set("sspassword", "***")
-	query := strings.ReplaceAll(redacted.Encode(), "%2A%2A%2A", "***")
-	return endpointURL(endpoint, query)
+	q := u.Query()
+	for _, k := range []string{"devpassword", "sspassword"} {
+		if q.Has(k) {
+			q.Set(k, "***")
+		}
+	}
+	u.RawQuery = strings.ReplaceAll(q.Encode(), "%2A%2A%2A", "***")
+	return u.String()
 }
 
 func endpointURL(endpoint, query string) string {
@@ -299,27 +351,24 @@ type StatusError struct {
 	Body       string
 }
 
+// Causes of the permanent statuses that are not cutoff statuses; those are
+// named by cutoff.StatusCause.
 var permanentStatusCauses = map[int]string{
 	400: "ScreenScraper rejected the request as malformed",
-	403: "ScreenScraper rejected developer credentials",
 	404: "ScreenScraper has no entry for the request",
-	423: "ScreenScraper API is closed",
-	426: "ScreenScraper has blacklisted this software name; update Scrapegoat",
-	430: "ScreenScraper daily quota exceeded",
-	431: "ScreenScraper failed-request quota exceeded (too many unrecognized ROMs today)",
 }
 
 // Error names the cause of the status, with the start of the response body.
 func (e *StatusError) Error() string {
 	cause, ok := permanentStatusCauses[e.StatusCode]
 	if !ok {
+		cause = cutoff.StatusCause(e.StatusCode)
+	}
+	if cause == "" {
 		cause = "ScreenScraper returned an unexpected status"
 	}
 	msg := fmt.Sprintf("%s (%d)", cause, e.StatusCode)
-	if body := strings.TrimSpace(e.Body); body != "" {
-		if len(body) > 200 {
-			body = body[:200] + "..."
-		}
+	if body := cutoff.BodyExcerpt(e.Body); body != "" {
 		msg += ": " + body
 	}
 	return msg
@@ -342,6 +391,10 @@ func getJSONWithRetry[T any](c *Client, endpoint string, params url.Values) (*T,
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		if attempt > 0 {
 			c.clock.Sleep(time.Duration(1<<uint(attempt)) * time.Second)
+		}
+
+		if cause, ok := c.cutoff.Cause(); ok {
+			return nil, &cutoff.Error{Cause: cause}
 		}
 
 		c.debugf("GET %s (attempt %d/%d)", logURL, attempt+1, maxAttempts)
@@ -369,7 +422,11 @@ func getJSONWithRetry[T any](c *Client, endpoint string, params url.Values) (*T,
 
 		if resp.StatusCode != http.StatusOK {
 			if !isTransientStatus(resp.StatusCode) {
-				return nil, &StatusError{StatusCode: resp.StatusCode, Body: string(body)}
+				se := &StatusError{StatusCode: resp.StatusCode, Body: string(body)}
+				if cutoff.IsCutoffStatus(resp.StatusCode) {
+					return nil, c.cutoff.TripError(resp.StatusCode, se.Body, se)
+				}
+				return nil, se
 			}
 			lastErr = fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 			continue
