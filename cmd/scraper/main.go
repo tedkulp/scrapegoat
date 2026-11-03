@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/tedkulp/scrapegoat/internal/artwork"
 	_ "github.com/tedkulp/scrapegoat/internal/artwork/effects" // Register effects
-	"github.com/tedkulp/scrapegoat/internal/downloader"
+	"github.com/tedkulp/scrapegoat/internal/media"
 	"github.com/tedkulp/scrapegoat/internal/metadata"
 	"github.com/tedkulp/scrapegoat/internal/scanner"
 	"github.com/tedkulp/scrapegoat/internal/scraper"
@@ -95,7 +95,7 @@ func init() {
 	scrapeCmd.Flags().StringVar(&autoDelete, "auto-delete", "", "automatically delete failed ROMs: true=delete, false=keep, unset=prompt (default: prompt)")
 	scrapeCmd.Flags().StringVar(&artworkFlag, "artwork", "", "enable/disable artwork generation: true=enable, false=disable, unset=use config (default: use config)")
 	scrapeCmd.Flags().IntVar(&cacheHours, "cache-hours", 12, "hours before cache expires for both platforms and ROM metadata (default: 12)")
-	scrapeCmd.Flags().BoolVar(&forceRedownload, "force-redownload", false, "re-download media files even if they already exist in the destination directory")
+	scrapeCmd.Flags().BoolVar(&forceRedownload, "force-redownload", false, "re-download every media file from ScreenScraper, skipping both the media root and the media cache (counts against the daily quota)")
 
 	scrapeCmd.MarkFlagRequired("platform")
 	scrapeCmd.MarkFlagRequired("rom-dir")
@@ -284,16 +284,13 @@ func runScraper(cmd *cobra.Command, args []string) {
 		scraper.WithDebug(verbose),
 	)
 
-	// Step 3: Initialize downloader
-	var dl *downloader.Downloader
-	if !dryRun {
-		dl, err = downloader.NewDownloader(cacheDir, platformName, workers)
-		if err != nil {
-			log.Fatalf("Failed to create downloader: %v", err)
-		}
-		// Enable debug mode if verbose
-		dl.SetDebug(verbose)
+	// Step 3: Initialize media placement
+	mediaOpts := []media.Option{}
+	if verbose {
+		mediaOpts = append(mediaOpts, media.WithDebugOutput(os.Stderr))
 	}
+	placer := media.New(cacheDir, platformName, mediaRootDir, workers, mediaOpts...)
+	mediaMode := media.Mode{DryRun: dryRun, Force: forceRedownload}
 
 	// Step 3.5: Initialize artwork compositor if enabled
 	var compositor *artwork.Compositor
@@ -363,83 +360,30 @@ func runScraper(cmd *cobra.Command, args []string) {
 			continue
 		}
 
+		mediaPlan := placer.Plan(game, rom.Filename, mediaMode)
+
 		if dryRun {
-			dryRunMediaFiles := buildMediaFileList(game, rom.Filename)
-			_, dryRunToDownload := filterExistingMediaFiles(dryRunMediaFiles, mediaRootDir)
-			logInfo("  [DRY RUN] Would download %d media files (%d already exist)", len(dryRunToDownload), len(dryRunMediaFiles)-len(dryRunToDownload))
+			logInfo("  [DRY RUN] Would download %d media files (%d from cache, %d already exist)",
+				mediaPlan.Count(media.SourceDownload), mediaPlan.Count(media.SourceCache), mediaPlan.Count(media.SourceExisting))
 			successCount++
 			continue
 		}
 
-		// Get ROM name without extension for media filenames and artwork
+		// Get ROM name without extension for artwork
 		romName := strings.TrimSuffix(rom.Filename, filepath.Ext(rom.Filename))
 
-		// Download media files
-		allMediaFiles := buildMediaFileList(game, rom.Filename)
-
-		downloadedFiles := make(map[string]string)
-		mediaAPICallCount := 0
-		existingCount := 0
-
-		// Determine which files need downloading vs already present in final location
-		mediaFiles := allMediaFiles
-		if !forceRedownload {
-			var alreadyExisting map[string]string
-			alreadyExisting, mediaFiles = filterExistingMediaFiles(allMediaFiles, mediaRootDir)
-			for mType, path := range alreadyExisting {
-				downloadedFiles[mType] = path
-				existingCount++
-			}
+		logVerbose("  Placing %d media files (%d already exist)...", len(mediaPlan.Items), mediaPlan.Count(media.SourceExisting))
+		mediaResult := placer.Execute(mediaPlan)
+		for mediaType, err := range mediaResult.Failures {
+			logError("    Failed to place %s: %v", mediaType, err)
+		}
+		if summary := mediaSummary(mediaResult); summary != "" {
+			logInfo("  Media: %s", summary)
 		}
 
-		logVerbose("  Downloading %d media files (%d already exist)...", len(mediaFiles), existingCount)
-
-		if len(mediaFiles) > 0 {
-			results := dl.Download(mediaFiles)
-			cachedCount := 0
-			downloadedCount := 0
-
-			for _, result := range results {
-				if result.Error != nil {
-					logVerbose("    Failed to download %s: %v", result.MediaFile.Type, result.Error)
-					continue
-				}
-
-				if result.Cached {
-					cachedCount++
-					logVerbose("    Cached: %s", result.MediaFile.Type)
-				} else {
-					downloadedCount++
-					mediaAPICallCount++
-					logVerbose("    Downloaded: %s", result.MediaFile.Type)
-				}
-
-				typeDir := filepath.Join(mediaRootDir, result.MediaFile.Type)
-				finalPath := filepath.Join(typeDir, result.MediaFile.Filename)
-				if err := dl.CopyToFinal(result.LocalPath, finalPath); err != nil {
-					logVerbose("    Failed to copy %s to final location: %v", result.MediaFile.Type, err)
-					continue
-				}
-
-				downloadedFiles[result.MediaFile.Type] = finalPath
-			}
-
-			// Build media summary showing only non-zero counts
-			var parts []string
-			if existingCount > 0 {
-				parts = append(parts, fmt.Sprintf("%d existing", existingCount))
-			}
-			if downloadedCount > 0 {
-				parts = append(parts, fmt.Sprintf("%d downloaded", downloadedCount))
-			}
-			if cachedCount > 0 {
-				parts = append(parts, fmt.Sprintf("%d from cache", cachedCount))
-			}
-			if len(parts) > 0 {
-				logInfo("  Media: %s", strings.Join(parts, ", "))
-			}
-		} else if existingCount > 0 {
-			logInfo("  Media: %d existing", existingCount)
+		downloadedFiles := make(map[string]string, len(mediaResult.Placed))
+		for mediaType, path := range mediaResult.Placed {
+			downloadedFiles[mediaType] = path
 		}
 
 		// Generate artwork if enabled
@@ -584,62 +528,23 @@ func cacheDurationMessage(hours int) string {
 	return fmt.Sprintf("Game data is cached for %d %s", hours, unit)
 }
 
-func filterExistingMediaFiles(mediaFiles []downloader.MediaFile, mediaRootDir string) (existing map[string]string, toDownload []downloader.MediaFile) {
-	existing = make(map[string]string)
-	for _, mf := range mediaFiles {
-		finalPath := filepath.Join(mediaRootDir, mf.Type, mf.Filename)
-		if _, err := os.Stat(finalPath); err == nil {
-			existing[mf.Type] = finalPath
-		} else {
-			toDownload = append(toDownload, mf)
+// mediaSummary describes a ROM's placed media, listing only non-zero counts.
+func mediaSummary(r media.Result) string {
+	var parts []string
+	for _, c := range []struct {
+		n     int
+		label string
+	}{
+		{r.Existing, "existing"},
+		{r.Downloaded, "downloaded"},
+		{r.FromCache, "from cache"},
+		{r.Failed, "failed"},
+	} {
+		if c.n > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", c.n, c.label))
 		}
 	}
-	return
-}
-
-func buildMediaFileList(game *scraper.Game, romFilename string) []downloader.MediaFile {
-	var mediaFiles []downloader.MediaFile
-	preferredRegions := []string{"us", "wor", "eu", "jp"}
-
-	// Get ROM name without extension for media filenames
-	romName := strings.TrimSuffix(romFilename, filepath.Ext(romFilename))
-
-	// Map ScreenScraper media types to EmulationStation directory names
-	// This mapping is required by EmulationStation's media organization
-	mediaTypeMapping := map[string]string{
-		"box-3D":      "3dboxes",
-		"box-2D":      "box2dfront",
-		"box-2D-back": "backcovers",
-		"manuel":      "manuals",
-		"ss":          "screenshots",
-		"sstitle":     "titlescreens",
-		"wheel":       "wheel",
-		"video":       "videos",
-		"support-2D":  "physicalmedia",
-	}
-
-	for apiType, esDirectory := range mediaTypeMapping {
-		media := game.GetPreferredMedia(apiType, preferredRegions)
-		if media != nil && media.URL != "" {
-			// Determine file extension from format or URL
-			ext := media.Format
-			if ext == "" {
-				ext = filepath.Ext(media.URL)
-			}
-			if ext != "" && !strings.HasPrefix(ext, ".") {
-				ext = "." + ext
-			}
-
-			// Files are organized by EmulationStation media type in subdirectories
-			mediaFiles = append(mediaFiles, downloader.MediaFile{
-				URL:      media.URL,
-				Filename: fmt.Sprintf("%s%s", romName, ext),
-				Type:     esDirectory, // Use EmulationStation directory name
-			})
-		}
-	}
-
-	return mediaFiles
+	return strings.Join(parts, ", ")
 }
 
 func logInfo(format string, args ...interface{}) {
