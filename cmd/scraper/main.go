@@ -2,17 +2,19 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
-	"github.com/gosimple/slug"
 	"github.com/spf13/cobra"
 	"github.com/tedkulp/scrapegoat/internal/artwork"
 	_ "github.com/tedkulp/scrapegoat/internal/artwork/effects" // Register effects
 	"github.com/tedkulp/scrapegoat/internal/media"
 	"github.com/tedkulp/scrapegoat/internal/metadata"
+	"github.com/tedkulp/scrapegoat/internal/platform"
 	"github.com/tedkulp/scrapegoat/internal/scanner"
 	"github.com/tedkulp/scrapegoat/internal/scrape"
 	"github.com/tedkulp/scrapegoat/internal/scraper"
@@ -43,9 +45,10 @@ Generates a gamelist.xml file compatible with EmulationStation.`,
 
 var listPlatformsCmd = &cobra.Command{
 	Use:   "list-platforms",
-	Short: "List all available platforms from ScreenScraper",
-	Long: `Fetches and displays all available platforms/systems from ScreenScraper.fr.
-Results are cached locally and refreshed every 12 hours.`,
+	Short: "List every platform and the slug that picks it",
+	Long: `Lists every platform in the platform catalog: ScreenScraper's platforms and
+any defined in config.yaml (marked "(config)"), each with the slug that picks it.
+ScreenScraper's list is cached in <cache_dir>/platforms.json and refetched after 12 hours.`,
 	Run: runListPlatforms,
 }
 
@@ -65,6 +68,10 @@ var versionCmd = &cobra.Command{
 	},
 }
 
+// defaultCacheHours is how long platforms.json and game lookups stay fresh
+// unless --cache-hours says otherwise; list-platforms always uses it.
+const defaultCacheHours = 12
+
 // scrapeFlagValues is what Cobra binds the scrape flags into.
 var scrapeFlagValues scrapeFlags
 
@@ -83,7 +90,7 @@ func init() {
 	scrapeCmd.Flags().BoolVar(&scrapeFlagValues.dryRun, "dry-run", false, "scan and query API but don't download or write files")
 	scrapeCmd.Flags().StringVar(&scrapeFlagValues.autoDelete, "auto-delete", "", "delete unmatched ROMs (not found, non-game, or failed): true/1=delete, false/0=keep, unset=prompt (default: prompt)")
 	scrapeCmd.Flags().StringVar(&scrapeFlagValues.artwork, "artwork", "", "enable/disable artwork generation: true/1=enable, false/0=disable, unset=use config (default: use config)")
-	scrapeCmd.Flags().IntVar(&scrapeFlagValues.cacheHours, "cache-hours", 12, "hours before cache expires for both platforms and ROM metadata, must be greater than 0")
+	scrapeCmd.Flags().IntVar(&scrapeFlagValues.cacheHours, "cache-hours", defaultCacheHours, "hours before cache expires for both platforms and ROM metadata, must be greater than 0")
 	scrapeCmd.Flags().BoolVar(&scrapeFlagValues.forceRedownload, "force-redownload", false, "re-download every media file from ScreenScraper, skipping both the media root and the media cache (counts against the daily quota)")
 
 	scrapeCmd.MarkFlagRequired("platform")
@@ -110,88 +117,64 @@ func runListPlatforms(cmd *cobra.Command, args []string) {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	logInfo("Fetching platforms from ScreenScraper.fr...")
-
-	// Create scraper client
-	client := scraper.NewClient(cfg.ScreenScraper.Credentials())
-
-	// Fetch systems list
-	systems, err := client.GetSystemsList()
-	if err != nil {
-		log.Fatalf("Failed to fetch platforms: %v", err)
-	}
-
-	logVerbose("Raw systems count from API: %d", len(systems))
-	if verbose && len(systems) > 0 {
-		logVerbose("First system: ID=%d, Names=%+v", systems[0].ID, systems[0].Names)
-	}
-
-	logInfo("Found %d platforms:\n", len(systems))
-
-	// Sort by ID for consistent output
-	type platformInfo struct {
-		id         int
-		slug       string
-		name       string
-		extensions []string
-	}
-
-	platforms := make([]platformInfo, 0, len(systems))
-	preferredRegions := scraper.DefaultRegions()
-
-	for _, system := range systems {
-		fullName := system.GetPreferredName(preferredRegions)
-		if fullName == "" {
-			continue
-		}
-
-		// Take only the first name if multiple names are comma-separated
-		displayName := fullName
-		if idx := strings.Index(displayName, ","); idx > 0 {
-			displayName = displayName[:idx]
-		}
-
-		// Create proper URL-safe slug (same logic as config package)
-		// This handles special characters like ², é, etc.
-		// Remove dashes to make slugs more compact (e.g., "n64dd" instead of "n64-dd")
-		platformSlug := strings.ReplaceAll(slug.Make(fullName), "-", "")
-
-		// If name has multiple comma-separated parts, find the shortest slug
-		if strings.Contains(fullName, ",") {
-			nameParts := strings.Split(fullName, ",")
-			shortestSlug := strings.ReplaceAll(slug.Make(strings.TrimSpace(nameParts[0])), "-", "")
-
-			for _, part := range nameParts[1:] {
-				partSlug := strings.ReplaceAll(slug.Make(strings.TrimSpace(part)), "-", "")
-				if len(partSlug) < len(shortestSlug) {
-					shortestSlug = partSlug
-				}
-			}
-			platformSlug = shortestSlug
-		}
-
-		// Use the preferred slug (alias) if one exists
-		displaySlug := config.GetPreferredSlug(platformSlug)
-
-		platforms = append(platforms, platformInfo{
-			id:         system.ID,
-			slug:       displaySlug,
-			name:       displayName,
-			extensions: system.Extensions,
-		})
-	}
-
-	// Print platforms with slug column
-	fmt.Printf("%-5s %-25s %-30s %s\n", "ID", "Slug", "Platform Name", "Extensions")
-	fmt.Printf("%-5s %-25s %-30s %s\n", "-----", "-------------------------", "------------------------------", "----------")
-
-	for _, p := range platforms {
-		extList := strings.Join(p.extensions, ", ")
-		fmt.Printf("%-5d %-25s %-30s %s\n", p.id, p.slug, p.name, extList)
+	catalog := newPlatformCatalog(cfg, cfg.Output.CacheDir, defaultCacheHours)
+	if err := listPlatforms(os.Stdout, catalog); err != nil {
+		log.Fatalf("Failed to list platforms: %v", err)
 	}
 
 	logInfo("\nTo use a platform, specify the slug with the --platform flag.")
 	logInfo("Example: scrapegoat scrape --platform nes --rom-dir /path/to/roms")
+}
+
+// listPlatforms writes the platform catalog as a table, one platform per row
+// with the slug that picks it. Platforms from config.yaml are marked.
+func listPlatforms(w io.Writer, catalog *platform.Catalog) error {
+	entries, err := catalog.List()
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(w, "Found %d platforms:\n\n", len(entries))
+	fmt.Fprintf(w, "%-5s %-25s %-30s %s\n", "ID", "Slug", "Platform Name", "Extensions")
+	fmt.Fprintf(w, "%-5s %-25s %-30s %s\n", "-----", "-------------------------", "------------------------------", "----------")
+	for _, e := range entries {
+		slug := e.Slug
+		if slug == "" {
+			slug = "-"
+		}
+		name := e.Platform.Name
+		if e.FromConfig {
+			name += " (config)"
+		}
+		fmt.Fprintf(w, "%-5d %-25s %-30s %s\n", e.Platform.ID, slug, name, strings.Join(e.Platform.Extensions, ", "))
+	}
+	return nil
+}
+
+// newPlatformCatalog builds the platform catalog from config.yaml's
+// platforms and ScreenScraper, cached in cacheDir for cacheHours.
+func newPlatformCatalog(cfg *config.Config, cacheDir string, cacheHours int) *platform.Catalog {
+	configured := make(map[string]platform.Platform, len(cfg.Platforms))
+	for slug, p := range cfg.Platforms {
+		configured[slug] = platform.Platform{ID: p.ID, Name: p.Name, Extensions: p.Extensions}
+	}
+	return platform.New(platform.Options{
+		Source:     scraper.NewClient(screenScraperCredentials(cfg.ScreenScraper), scraper.WithDebug(verbose)),
+		Configured: configured,
+		CacheDir:   cacheDir,
+		Expiry:     time.Duration(cacheHours) * time.Hour,
+	})
+}
+
+// screenScraperCredentials converts the config's credentials for the client.
+func screenScraperCredentials(c config.ScreenScraperConfig) scraper.Credentials {
+	return scraper.Credentials{
+		DevID:        c.DevID,
+		DevPassword:  c.DevPassword,
+		UserID:       c.UserID,
+		UserPassword: c.UserPassword,
+		SoftwareName: c.SoftwareName,
+	}
 }
 
 func runScraper(cmd *cobra.Command, args []string) {
@@ -214,7 +197,7 @@ func runScraper(cmd *cobra.Command, args []string) {
 
 	// Get platform configuration; platforms.json lives in the resolved
 	// cache dir, like every other cache.
-	platform, err := cfg.GetPlatform(platformName, cacheDir, settings.CacheHours)
+	platform, err := newPlatformCatalog(cfg, cacheDir, settings.CacheHours).Lookup(platformName)
 	if err != nil {
 		log.Fatalf("Failed to get platform configuration: %v", err)
 	}
@@ -247,7 +230,7 @@ func runScraper(cmd *cobra.Command, args []string) {
 	}
 
 	// Step 2: Initialize scraper client
-	scraperClient := scraper.NewClient(cfg.ScreenScraper.Credentials(),
+	scraperClient := scraper.NewClient(screenScraperCredentials(cfg.ScreenScraper),
 		scraper.WithCache(cacheDir, settings.CacheHours),
 		scraper.WithDebug(verbose),
 	)
@@ -443,7 +426,7 @@ func runUserInfo(cmd *cobra.Command, args []string) {
 	logInfo("Fetching user information from ScreenScraper.fr...")
 
 	// Create scraper client
-	client := scraper.NewClient(cfg.ScreenScraper.Credentials())
+	client := scraper.NewClient(screenScraperCredentials(cfg.ScreenScraper))
 
 	// Fetch user info
 	userInfo, err := client.GetUserInfo()

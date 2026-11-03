@@ -1,17 +1,12 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
-	"time"
 
-	"github.com/gosimple/slug"
 	"github.com/spf13/viper"
 	"github.com/tedkulp/scrapegoat/internal/artwork"
-	"github.com/tedkulp/scrapegoat/internal/scraper"
 )
 
 // Config represents the application configuration
@@ -31,7 +26,8 @@ type ScreenScraperConfig struct {
 	SoftwareName string `mapstructure:"software_name"`
 }
 
-// Platform defines a gaming platform/system
+// Platform is a platform defined in the config.yaml platforms: block, keyed
+// by its slug. It overrides a ScreenScraper platform with the same slug.
 type Platform struct {
 	ID         int      `mapstructure:"id"`
 	Name       string   `mapstructure:"name"`
@@ -118,173 +114,4 @@ func Load(configPath string) (*Config, error) {
 	}
 
 	return &config, nil
-}
-
-// Credentials returns the ScreenScraper credentials from the configuration.
-func (s ScreenScraperConfig) Credentials() scraper.Credentials {
-	return scraper.Credentials{
-		DevID:        s.DevID,
-		DevPassword:  s.DevPassword,
-		UserID:       s.UserID,
-		UserPassword: s.UserPassword,
-		SoftwareName: s.SoftwareName,
-	}
-}
-
-// GetPlatform returns platform configuration by name. Entries in
-// config.yaml win; otherwise the platform comes from
-// <cacheDir>/platforms.json, refetched from the ScreenScraper API when it is
-// missing or older than cacheHours.
-func (c *Config) GetPlatform(name, cacheDir string, cacheHours int) (Platform, error) {
-	// First, try static platforms from config.yaml
-	platform, ok := c.Platforms[name]
-	if ok {
-		return platform, nil
-	}
-
-	cache, err := c.loadPlatforms(cacheDir, cacheHours)
-	if err != nil {
-		return Platform{}, fmt.Errorf("platform %s not found and failed to fetch from API: %w", name, err)
-	}
-
-	// Try to find platform in cache by name (case-insensitive)
-	platform, ok = cache.FindByName(name)
-	if !ok {
-		return Platform{}, fmt.Errorf("platform %s not found in configuration or API", name)
-	}
-
-	return platform, nil
-}
-
-// PlatformsCache stores cached platform data from ScreenScraper API
-type PlatformsCache struct {
-	FetchedAt time.Time           `json:"fetched_at"`
-	Platforms map[string]Platform `json:"platforms"` // Key is platform name (lowercase)
-}
-
-// FindByName searches for a platform by name (case-insensitive)
-func (pc *PlatformsCache) FindByName(name string) (Platform, bool) {
-	platform, ok := pc.Platforms[strings.ToLower(name)]
-	return platform, ok
-}
-
-// IsExpired checks if the cache is older than the specified duration
-func (pc *PlatformsCache) IsExpired(expirationHours int) bool {
-	return time.Since(pc.FetchedAt) > time.Duration(expirationHours)*time.Hour
-}
-
-// fetchSystemsList asks ScreenScraper for its systems list. Tests replace it.
-var fetchSystemsList = func(creds scraper.Credentials) ([]scraper.System, error) {
-	return scraper.NewClient(creds).GetSystemsList()
-}
-
-// loadPlatforms reads <cacheDir>/platforms.json, or fetches the platforms
-// from ScreenScraper and rewrites that file when it is missing or older than
-// cacheHours.
-func (c *Config) loadPlatforms(cacheDir string, cacheHours int) (*PlatformsCache, error) {
-	cacheFile := filepath.Join(cacheDir, "platforms.json")
-
-	// Try to load from cache file first
-	if cache, err := loadPlatformsCache(cacheFile); err == nil && !cache.IsExpired(cacheHours) {
-		// Apply platform aliases even when loading from cache
-		applyPlatformAliases(cache.Platforms)
-		return cache, nil
-	}
-
-	// Cache is expired or doesn't exist, fetch from API
-	systems, err := fetchSystemsList(c.ScreenScraper.Credentials())
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch systems list from API: %w", err)
-	}
-
-	// Convert systems to platforms map
-	platforms := make(map[string]Platform)
-	preferredRegions := scraper.DefaultRegions()
-
-	for _, system := range systems {
-		name := system.GetPreferredName(preferredRegions)
-		if name == "" {
-			continue
-		}
-
-		platform := Platform{
-			ID:         system.ID,
-			Name:       name,
-			Extensions: system.Extensions,
-		}
-
-		// Create proper URL-safe slugs from the name
-		// This handles special characters like ², é, etc.
-		// Remove dashes to make slugs more compact (e.g., "n64dd" instead of "n64-dd")
-		fullSlug := strings.ReplaceAll(slug.Make(name), "-", "")
-
-		// Store under full slug
-		platforms[fullSlug] = platform
-
-		// Also store under each individual slug part (if comma-separated)
-		// This allows users to use short names like "nes" instead of the full slug
-		if strings.Contains(name, ",") {
-			nameParts := strings.Split(name, ",")
-			for _, namePart := range nameParts {
-				namePart = strings.TrimSpace(namePart)
-				if namePart != "" {
-					partSlug := strings.ReplaceAll(slug.Make(namePart), "-", "")
-					// Only store if not already taken by another platform
-					if _, exists := platforms[partSlug]; !exists {
-						platforms[partSlug] = platform
-					}
-				}
-			}
-		}
-	}
-
-	// Apply platform aliases (allows custom slug names)
-	applyPlatformAliases(platforms)
-
-	// Create and save cache
-	cache := &PlatformsCache{
-		FetchedAt: time.Now(),
-		Platforms: platforms,
-	}
-
-	if err := savePlatformsCache(cache, cacheFile); err != nil {
-		// Log warning but don't fail - we have the data
-		fmt.Fprintf(os.Stderr, "Warning: failed to save platforms cache: %v\n", err)
-	}
-
-	return cache, nil
-}
-
-// loadPlatformsCache loads the cached platforms from disk
-func loadPlatformsCache(cacheFile string) (*PlatformsCache, error) {
-	data, err := os.ReadFile(cacheFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read cache file: %w", err)
-	}
-
-	var cache PlatformsCache
-	if err := json.Unmarshal(data, &cache); err != nil {
-		return nil, fmt.Errorf("failed to parse cache file: %w", err)
-	}
-
-	return &cache, nil
-}
-
-// savePlatformsCache saves the platforms cache to disk
-func savePlatformsCache(cache *PlatformsCache, cacheFile string) error {
-	// Ensure cache directory exists
-	if err := os.MkdirAll(filepath.Dir(cacheFile), 0755); err != nil {
-		return fmt.Errorf("failed to create cache directory: %w", err)
-	}
-
-	data, err := json.MarshalIndent(cache, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal cache: %w", err)
-	}
-
-	if err := os.WriteFile(cacheFile, data, 0644); err != nil {
-		return fmt.Errorf("failed to write cache file: %w", err)
-	}
-
-	return nil
 }

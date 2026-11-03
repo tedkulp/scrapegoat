@@ -75,7 +75,7 @@ Platform slugs you can use with `--platform`:
 - `psx` - PlayStation
 - `gb` / `gbc` / `gba` - Game Boy, Game Boy Color, Game Boy Advance
 
-Platforms are fetched from ScreenScraper automatically. Run `./scrapegoat list-platforms` to see every slug.
+Platforms are fetched from ScreenScraper automatically and cached in `~/.scrapegoat/platforms.json`. Run `./scrapegoat list-platforms` to see every slug; slugs are not case-sensitive, and most platforms have several (one per name ScreenScraper gives it), so `famicom` picks the same platform as `nes`.
 
 ## Tips
 
