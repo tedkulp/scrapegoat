@@ -119,12 +119,12 @@ func (s *Scraper) Scrape(rom scanner.ROMFile) (Result, error) {
 	if err != nil {
 		return Result{}, &Failure{Stage: StageHash, Err: err}
 	}
-	lr, err := s.lookup.Lookup(s.systemID, rom.Filename, hashes)
+	answer, err := s.lookup.Lookup(s.systemID, rom.Filename, hashes)
 	if err != nil {
 		return Result{Hashes: hashes}, &Failure{Stage: StageLookup, Err: err}
 	}
-	res := Result{Hashes: hashes, Game: lr.Game, Cached: lr.Cached}
-	switch lr.Outcome {
+	res := Result{Hashes: hashes, Game: answer.Game, Cached: answer.Cached}
+	switch answer.Outcome {
 	case scraper.OutcomeNotFound:
 		res.Outcome = OutcomeNotFound
 		return res, nil
@@ -133,7 +133,7 @@ func (s *Scraper) Scrape(rom scanner.ROMFile) (Result, error) {
 		return res, nil
 	}
 	res.Outcome = OutcomeScraped
-	res.Plan = s.placer.Plan(lr.Game, rom.Filename, s.mode)
+	res.Plan = s.placer.Plan(answer.Game, rom.Filename, s.mode)
 	if s.mode.DryRun {
 		res.DryRun = true
 		return res, nil

@@ -271,7 +271,7 @@ func runScraper(cmd *cobra.Command, args []string) {
 	gen := metadata.NewGenerator(gamelistDir, mediaRootDir)
 
 	// Step 5: Scrape each ROM
-	scrapeJob := scrape.New(scraperClient, placer, compositor, platform.ID,
+	romScraper := scrape.New(scraperClient, placer, compositor, platform.ID,
 		media.Mode{DryRun: dryRun, Force: settings.ForceRedownload})
 
 	logInfo("\nProcessing ROM files...")
@@ -280,7 +280,7 @@ func runScraper(cmd *cobra.Command, args []string) {
 	for i, rom := range roms {
 		logInfo("\n[%d/%d] Processing: %s", i+1, len(roms), rom.Filename)
 
-		res, err := scrapeJob.Scrape(rom)
+		res, err := romScraper.Scrape(rom)
 		printReport(scrapeReport(res, err))
 		tally.record(rom, res, err)
 

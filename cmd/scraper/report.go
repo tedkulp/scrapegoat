@@ -41,13 +41,13 @@ func scrapeReport(res scrape.Result, err error) []reportLine {
 
 	if err != nil {
 		var f *scrape.Failure
-		if errors.As(err, &f) && f.Stage == scrape.StageHash {
-			add(levelError, "  Failed to hash ROM: %v", f.Err)
-		} else {
-			if f != nil {
-				err = f.Err
-			}
+		switch {
+		case !errors.As(err, &f):
 			add(levelError, "  Failed to get game info: %v", err)
+		case f.Stage == scrape.StageHash:
+			add(levelError, "  Failed to hash ROM: %v", f.Err)
+		default:
+			add(levelError, "  Failed to get game info: %v", f.Err)
 		}
 		return lines
 	}
