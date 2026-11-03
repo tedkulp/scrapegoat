@@ -14,6 +14,14 @@ func TestMediaSummary_ListsNonZeroCountsIncludingFailed(t *testing.T) {
 	}
 }
 
+func TestMediaSummary_ListsDeferredFiles(t *testing.T) {
+	got := mediaSummary(media.Result{FromCache: 1, Deferred: 4})
+	want := "1 from cache, 4 deferred (cutoff)"
+	if got != want {
+		t.Errorf("mediaSummary = %q, want %q", got, want)
+	}
+}
+
 func TestMediaSummary_EmptyWhenNothingPlaced(t *testing.T) {
 	if got := mediaSummary(media.Result{}); got != "" {
 		t.Errorf("mediaSummary = %q, want empty", got)

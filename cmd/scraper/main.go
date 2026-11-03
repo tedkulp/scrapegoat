@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/tedkulp/scrapegoat/internal/artwork"
 	_ "github.com/tedkulp/scrapegoat/internal/artwork/effects" // Register effects
+	"github.com/tedkulp/scrapegoat/internal/cutoff"
 	"github.com/tedkulp/scrapegoat/internal/media"
 	"github.com/tedkulp/scrapegoat/internal/metadata"
 	"github.com/tedkulp/scrapegoat/internal/platform"
@@ -229,13 +230,16 @@ func runScraper(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	// Step 2: Initialize scraper client
+	// Step 2: Initialize scraper client. One cutoff is shared by lookups and
+	// media, so after the first cutoff status neither sends a request.
+	cut := cutoff.New()
 	scraperClient := scraper.NewClient(screenScraperCredentials(cfg.ScreenScraper),
 		scraper.WithCache(cacheDir, settings.CacheHours),
 		scraper.WithDebug(verbose),
+		scraper.WithCutoff(cut),
 	)
 
-	mediaOpts := []media.Option{}
+	mediaOpts := []media.Option{media.WithCutoff(cut)}
 	if verbose {
 		mediaOpts = append(mediaOpts, media.WithDebugOutput(os.Stderr))
 	}
@@ -249,36 +253,32 @@ func runScraper(cmd *cobra.Command, args []string) {
 		logInfo("Artwork generation: Enabled")
 	}
 
-	// Step 4: Initialize metadata generator
+	// Step 4: Initialize metadata generator (not used in a dry run)
 	// Note: mediaRootDir is used directly, no longer needs cfg.Output.MediaDir subdirectory
-	gen := metadata.NewGenerator(gamelistDir, mediaRootDir)
-
-	// Step 5: Scrape each ROM
-	romScraper := scrape.New(scraperClient, placer, compositor, platform.ID,
-		media.Mode{DryRun: dryRun, Force: settings.ForceRedownload})
-
-	logInfo("\nProcessing ROM files...")
-	var tally runTally
-
-	for i, rom := range roms {
-		logInfo("\n[%d/%d] Processing: %s", i+1, len(roms), rom.Filename)
-
-		res, err := romScraper.Scrape(rom)
-		printReport(scrapeReport(res, err))
-		tally.record(rom, res, err)
-
-		if err == nil && res.Outcome == scrape.OutcomeScraped && !res.DryRun {
-			gen.AddGameFromScraper(rom.Path, res.Game)
-			if quota := scraperClient.Quota(); quota.Known {
-				logInfo("  API Quota: %d requests remaining today", quota.Remaining())
-			}
-		}
+	gamelistPath := filepath.Join(gamelistDir, cfg.Output.GameListFile)
+	var gen *metadata.Generator
+	if !dryRun {
+		gen = metadata.NewGenerator(gamelistDir, mediaRootDir)
 	}
 
-	// Step 6: Write gamelist.xml
+	// Step 5: Scrape each ROM
+	loop := &romLoop{
+		scraper: scrape.New(scraperClient, placer, compositor, platform.ID,
+			media.Mode{DryRun: dryRun, Force: settings.ForceRedownload}),
+		cutoff:       cut,
+		gen:          gen,
+		gamelistPath: gamelistPath,
+		quota:        scraperClient.Quota,
+		report:       printReport,
+	}
+
+	logInfo("\nProcessing ROM files...")
+	tally := loop.run(roms)
+
+	// Step 6: Write gamelist.xml. After a cutoff, deferred ROMs' existing
+	// entries were carried over.
 	if !dryRun {
 		logInfo("\nWriting gamelist.xml...")
-		gamelistPath := filepath.Join(gamelistDir, cfg.Output.GameListFile)
 		if err := gen.WriteToFile(gamelistPath); err != nil {
 			log.Fatalf("Failed to write gamelist.xml: %v", err)
 		}
@@ -320,6 +320,11 @@ func runScraper(cmd *cobra.Command, args []string) {
 		logInfo("\n=== Cache Info ===")
 		logInfo("Cache directory: %s/games", cacheDir)
 		logInfo("%s", cacheDurationMessage(settings.CacheHours))
+	}
+
+	// A cutoff exits 1, after the gamelist is written.
+	if code := exitCode(cut); code != 0 {
+		os.Exit(code)
 	}
 }
 
@@ -384,6 +389,7 @@ func mediaSummary(r media.Result) string {
 		{r.Downloaded, "downloaded"},
 		{r.FromCache, "from cache"},
 		{r.Failed, "failed"},
+		{r.Deferred, "deferred (cutoff)"},
 	} {
 		if c.n > 0 {
 			parts = append(parts, fmt.Sprintf("%d %s", c.n, c.label))

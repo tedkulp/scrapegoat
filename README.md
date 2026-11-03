@@ -30,7 +30,7 @@ A ROM scraper for EmulationStation. It identifies your ROMs by hash against the 
    ```
 
 > [!WARNING]
-> At the end of a run, `scrape` lists the ROMs it could not match (not found, marked non-game, or failed) and **asks whether to delete them**. Pass `--auto-delete=false` to always keep them without a prompt.
+> At the end of a run, `scrape` lists the ROMs it could not match (not found, marked non-game, or failed) and **asks whether to delete them**. Pass `--auto-delete=false` to always keep them without a prompt. ROMs left unlooked-up because ScreenScraper cut the run off (quota used up, for example) are deferred, never offered for deletion.
 
 ## Prerequisites
 
@@ -203,7 +203,11 @@ Each media file is named after its ROM without the extension. A type is skipped 
 
 Media files that already exist in the media root are kept, and files in the media cache are copied from there without an API request. `--force-redownload` skips both and fetches every media file from ScreenScraper again, overwriting the cached and placed copies; those downloads count against your daily quota. `--dry-run` reports how many files would be downloaded, copied from the cache or kept, and applies `--force-redownload` the same way.
 
-A media file that fails to download is reported and counted in the `Media:` line as failed; the ROM itself still counts as scraped.
+A media file that fails to download is reported and counted in the `Media:` line as failed; the ROM itself still counts as scraped. Files not fetched because of a [cutoff](#cutoff-quota-used-up-credentials-rejected-api-closed) are counted as `deferred (cutoff)` instead.
+
+`gamelist.xml` is rewritten with this run's entries. After a cutoff, deferred ROMs keep their entries from the existing file.
+
+`scrape` exits 0 when it finishes, and 1 after a cutoff (once the gamelist is written).
 
 With artwork enabled, each artwork output writes `<media-root-dir>/<output_dir>/<rom-name>.<format>`; see [ARTWORK.md](ARTWORK.md).
 
@@ -214,7 +218,7 @@ All caches live under `--cache-dir`, or `output.cache_dir` from the config file 
 | What | Where | Expires |
 |---|---|---|
 | Platform catalog (ScreenScraper's systems list as fetched) | `platforms.json` | after `--cache-hours` (12); a file from an older Scrapegoat version is fetched again once |
-| Game lookups, including "not found" | `games/` | after `--cache-hours` (12) |
+| Game lookups, including "not found" | `games/` | after `--cache-hours` (12); after a cutoff, expired entries are still used |
 | Media files | `cache/<platform>/<media-type>/` | never |
 | Composed artwork | `artwork-cache/` | never; rebuilt when an output's settings or the media its layers use change |
 
@@ -247,8 +251,19 @@ When two platforms produce the same slug, the one with the lower ID gets it. A f
 
 - Scrapegoat waits at least 1 second between HTTP requests to ScreenScraper.
 - Transient failures (network errors, timeouts, 429, 5xx, an overloaded server) are retried up to 3 times with 2 s and 4 s backoff, plus 10 s after a 429.
-- Permanent failures stop immediately with the reason, e.g. bad developer credentials (403), API closed (423) or daily quota exceeded (430).
+- Permanent failures stop immediately with the reason, e.g. a malformed request (400).
 - Media downloads go through ScreenScraper too and count against your quota. Check it with `scrapegoat user-info`.
+
+### Cutoff: quota used up, credentials rejected, API closed
+
+Some statuses mean ScreenScraper will refuse every further request today: bad developer credentials (403), API closed (423), software name blacklisted (426), daily quota exceeded (430) and failed-request quota exceeded (431). The first of these, from a lookup or a media download, is the run's **cutoff**. From then on the run sends no more requests:
+
+- It prints one line naming the cause, e.g. `ScreenScraper daily quota exceeded (430): remaining ROMs deferred`.
+- Every remaining ROM is still hashed and looked up in the game cache. After a cutoff a cache entry counts however old it is, past `--cache-hours` included, so a ROM looked up by any earlier run still gets its usual result.
+- A ROM with no cache entry is **deferred**: it is not counted as failed, is never listed as unmatched, and is never deleted or offered for deletion, whatever `--auto-delete` says. The next run looks it up again.
+- Media is no longer fetched. Files already in the media cache are still copied into place, and a matched ROM still gets its `gamelist.xml` entry; the next run fetches the missing media.
+- `gamelist.xml` is still written (except in a dry run). A deferred ROM's entry from the existing `gamelist.xml` is kept unchanged, matched by `<path>`.
+- The summary adds `Deferred: N` and repeats the cause, and `scrape` **exits with status 1** once everything is written. A run without a cutoff exits as before.
 
 ## Troubleshooting
 
@@ -260,6 +275,10 @@ When two platforms produce the same slug, the one with the lower ID gets it. A f
 **`rate limited by API` or a quota error**
 - Check your quota with `scrapegoat user-info`. Quotas reset daily.
 - Lower `--workers`, since media downloads also use quota.
+
+**`... remaining ROMs deferred` and exit status 1**
+- ScreenScraper cut the run off (see [Cutoff](#cutoff-quota-used-up-credentials-rejected-api-closed)). Nothing was deleted for it: deferred ROMs are kept.
+- For 430 or 431, run again after the quota resets; cached ROMs are not looked up again. For 403, check `dev_id` and `dev_password`. For 426, update Scrapegoat. For 423, wait for the API to reopen.
 
 **`Failed to hash ROM`**
 - Check file permissions and make sure the file isn't corrupted.

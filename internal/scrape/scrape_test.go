@@ -2,6 +2,7 @@ package scrape
 
 import (
 	"errors"
+	"fmt"
 	"image"
 	"image/png"
 	"io/fs"
@@ -14,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/tedkulp/scrapegoat/internal/artwork"
+	"github.com/tedkulp/scrapegoat/internal/cutoff"
 	"github.com/tedkulp/scrapegoat/internal/media"
 	"github.com/tedkulp/scrapegoat/internal/scanner"
 	"github.com/tedkulp/scrapegoat/internal/scraper"
@@ -277,6 +279,33 @@ func TestScrape_HashFailureRecordsHashStage(t *testing.T) {
 	}
 	if lookup.calls != 0 {
 		t.Errorf("lookup called %d times, want 0", lookup.calls)
+	}
+}
+
+func TestScrape_LookupStoppedByCutoffIsDeferredNotAFailure(t *testing.T) {
+	e := newEnv(t)
+	cause := cutoff.Cause{StatusCode: 430, Body: "quota"}
+	lookup := &fakeLookup{err: fmt.Errorf("failed to look up game: %w", &cutoff.Error{Cause: cause})}
+	s := New(lookup, e.placer(), e.compositor(), systemID, media.Mode{})
+
+	res, err := s.Scrape(e.rom("Game.nes", "game"))
+
+	var ferr *Failure
+	if errors.As(err, &ferr) {
+		t.Fatalf("err = %v, a cutoff must not be a *Failure", err)
+	}
+	var d *Deferred
+	if !errors.As(err, &d) {
+		t.Fatalf("err = %v, want a *Deferred", err)
+	}
+	if d.Cause != cause {
+		t.Errorf("Deferred cause = %+v, want %+v", d.Cause, cause)
+	}
+	if res.Hashes == nil {
+		t.Error("deferred result has no hashes; hashing must still run")
+	}
+	if e.requests.Load() != 0 || len(files(t, e.root)) != 0 {
+		t.Error("a deferred ROM must place no media")
 	}
 }
 

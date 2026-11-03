@@ -47,7 +47,7 @@ func (gc *GameCache) getCacheFilePath(cacheKey string) (string, error) {
 // CacheResult represents a cache lookup result
 type CacheResult struct {
 	Game      *Game
-	Found     bool // True if cache entry exists and is not expired
+	Found     bool // True if cache entry exists (and, for Get, is not expired)
 	NotFound  bool // True if ROM was previously looked up and not found
 	IsNonGame bool // True if ROM was previously looked up and is a non-game
 }
@@ -55,6 +55,16 @@ type CacheResult struct {
 // Get retrieves cached game info if available and not expired
 // Returns a CacheResult with information about what was found in cache
 func (gc *GameCache) Get(hashes *ROMHashes) CacheResult {
+	return gc.get(hashes, true)
+}
+
+// GetAny retrieves cached game info whatever its age. It is for runs that
+// ScreenScraper has cut off, where an old answer beats none.
+func (gc *GameCache) GetAny(hashes *ROMHashes) CacheResult {
+	return gc.get(hashes, false)
+}
+
+func (gc *GameCache) get(hashes *ROMHashes, checkExpiry bool) CacheResult {
 	cacheFile, err := gc.getCacheFilePath(gc.getCacheKey(hashes))
 	if err != nil {
 		return CacheResult{Found: false}
@@ -70,8 +80,7 @@ func (gc *GameCache) Get(hashes *ROMHashes) CacheResult {
 		return CacheResult{Found: false}
 	}
 
-	// Check if expired
-	if entry.IsExpired(gc.now(), gc.expirationHours) {
+	if checkExpiry && entry.IsExpired(gc.now(), gc.expirationHours) {
 		return CacheResult{Found: false}
 	}
 

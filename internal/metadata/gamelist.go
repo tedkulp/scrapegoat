@@ -13,9 +13,11 @@ import (
 
 // Generator handles gamelist.xml generation
 type Generator struct {
-	romDir             string
-	mediaDir           string
-	gameList           *GameList
+	romDir   string
+	mediaDir string
+	// entries are Game (built this run) and rawGame (carried over), in
+	// the order they were added.
+	entries            []any
 	preferredRegions   []string
 	preferredLanguages []string
 }
@@ -25,7 +27,6 @@ func NewGenerator(romDir, mediaDir string) *Generator {
 	return &Generator{
 		romDir:             romDir,
 		mediaDir:           mediaDir,
-		gameList:           NewGameList(),
 		preferredRegions:   scraper.DefaultRegions(),
 		preferredLanguages: []string{"en", "us", "fr", "de", "es", "it", "pt"},
 	}
@@ -45,8 +46,7 @@ func (g *Generator) SetPreferredLanguages(languages []string) {
 func (g *Generator) AddGameFromScraper(romPath string, game *scraper.Game) {
 	// ROM path should be relative to gamelist.xml location (which is in romDir)
 	// EmulationStation expects paths like "./GameName.zip"
-	romFilename := filepath.Base(romPath)
-	relRomPath := "./" + romFilename
+	relRomPath := entryPath(romPath)
 
 	// Get only the first genre and trim whitespace
 	genreStr := strings.TrimSpace(game.GetFirstGenre())
@@ -74,12 +74,15 @@ func (g *Generator) AddGameFromScraper(romPath string, game *scraper.Game) {
 	// - Images in subdirectories like wheel/, screenshots/, etc.
 	// - Files should match the ROM name (without extension)
 
-	g.gameList.AddGame(gameEntry)
+	g.entries = append(g.entries, gameEntry)
 }
+
+// entryPath is a ROM's gamelist <path>: its filename with a "./" prefix.
+func entryPath(romPath string) string { return "./" + filepath.Base(romPath) }
 
 // AddGame adds a game entry directly
 func (g *Generator) AddGame(game Game) {
-	g.gameList.AddGame(game)
+	g.entries = append(g.entries, game)
 }
 
 // WriteToFile writes the gamelist.xml to disk
@@ -105,7 +108,11 @@ func (g *Generator) WriteToFile(filepath string) error {
 	encoder.Indent("", "  ")
 
 	// Encode the game list
-	if err := encoder.Encode(g.gameList); err != nil {
+	list := struct {
+		XMLName xml.Name `xml:"gameList"`
+		Games   []any    `xml:"game"`
+	}{Games: g.entries}
+	if err := encoder.Encode(list); err != nil {
 		return fmt.Errorf("failed to encode XML: %w", err)
 	}
 

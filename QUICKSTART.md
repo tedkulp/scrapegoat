@@ -54,7 +54,7 @@ Check that the credentials work:
 ```
 
 > [!WARNING]
-> At the end of a run, Scrapegoat lists the ROMs it could not match and **asks whether to delete them**. Add `--auto-delete=false` to keep them without being asked.
+> At the end of a run, Scrapegoat lists the ROMs it could not match and **asks whether to delete them**. Add `--auto-delete=false` to keep them without being asked. If your daily quota runs out mid-run, the remaining ROMs are deferred to the next run, not offered for deletion, and `scrape` exits with status 1.
 
 ## 5. Results
 
