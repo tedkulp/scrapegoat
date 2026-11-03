@@ -13,8 +13,6 @@ import (
 
 // Generator handles gamelist.xml generation
 type Generator struct {
-	romDir   string
-	mediaDir string
 	// entries are Game (built this run) and rawGame (carried over), in
 	// the order they were added.
 	entries            []any
@@ -23,10 +21,8 @@ type Generator struct {
 }
 
 // NewGenerator creates a new gamelist.xml generator
-func NewGenerator(romDir, mediaDir string) *Generator {
+func NewGenerator() *Generator {
 	return &Generator{
-		romDir:             romDir,
-		mediaDir:           mediaDir,
 		preferredRegions:   screenscraper.DefaultRegions(),
 		preferredLanguages: []string{"en", "us", "fr", "de", "es", "it", "pt"},
 	}
@@ -44,7 +40,7 @@ func (g *Generator) SetPreferredLanguages(languages []string) {
 
 // AddGameFromScraper converts ScreenScraper game data to gamelist.xml entry
 func (g *Generator) AddGameFromScraper(romPath string, game *screenscraper.Game) {
-	// ROM path should be relative to gamelist.xml location (which is in romDir)
+	// ROM path should be relative to gamelist.xml location (the ROM dir)
 	// EmulationStation expects paths like "./GameName.zip"
 	relRomPath := entryPath(romPath)
 

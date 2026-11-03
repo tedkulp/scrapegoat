@@ -57,7 +57,7 @@ func TestRomLoop_CutoffDefersROMsWithoutMakingThemUnmatched(t *testing.T) {
 		"d2.nes":        deferredBy(cut),
 	}}
 	var printed []reportLine
-	gen := metadata.NewGenerator(dir, dir)
+	gen := metadata.NewGenerator()
 	loop := &romLoop{scraper: s, cutoff: cut, gen: gen, gamelistPath: gamelistPath,
 		report: func(lines []reportLine) { printed = append(printed, lines...) }}
 

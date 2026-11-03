@@ -39,7 +39,7 @@ func TestCarryOver_KeepsDeferredEntriesUnchangedAndWritesNewOnes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadExisting: %v", err)
 	}
-	gen := NewGenerator(dir, dir)
+	gen := NewGenerator()
 	gen.AddGameFromScraper("/roms/Scraped.nes", &screenscraper.Game{Names: []screenscraper.Name{{Region: "us", Text: "New Name"}}})
 	if !gen.CarryOver(existing, "/roms/Deferred.nes") {
 		t.Error("CarryOver found no entry for Deferred.nes")
@@ -78,7 +78,7 @@ func TestCarryOver_KeepsDeferredEntriesUnchangedAndWritesNewOnes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("re-reading written gamelist: %v", err)
 	}
-	gen2 := NewGenerator(dir, dir)
+	gen2 := NewGenerator()
 	if !gen2.CarryOver(again, "/roms/Deferred.nes") || !gen2.CarryOver(again, "/roms/Scraped.nes") {
 		t.Error("written gamelist does not read back by path")
 	}
@@ -89,7 +89,7 @@ func TestReadExisting_MissingFileHasNoEntries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("missing file: %v", err)
 	}
-	if NewGenerator("", "").CarryOver(existing, "/roms/A.nes") {
+	if NewGenerator().CarryOver(existing, "/roms/A.nes") {
 		t.Error("missing file gave an entry")
 	}
 }

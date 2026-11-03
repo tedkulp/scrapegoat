@@ -1,13 +1,5 @@
 package metadata
 
-import "encoding/xml"
-
-// GameList represents the EmulationStation gamelist.xml structure
-type GameList struct {
-	XMLName xml.Name `xml:"gameList"`
-	Games   []Game   `xml:"game"`
-}
-
 // Game represents a single game entry in gamelist.xml
 // Note: Media tags (image, video, marquee, thumbnail) are not included
 // as EmulationStation finds media files by convention based on ROM filename
@@ -27,16 +19,4 @@ type Game struct {
 	KidGame     bool    `xml:"kidgame,omitempty"`
 	PlayCount   int     `xml:"playcount,omitempty"`
 	LastPlayed  string  `xml:"lastplayed,omitempty"`
-}
-
-// NewGameList creates a new empty GameList
-func NewGameList() *GameList {
-	return &GameList{
-		Games: []Game{},
-	}
-}
-
-// AddGame adds a game to the game list
-func (gl *GameList) AddGame(game Game) {
-	gl.Games = append(gl.Games, game)
 }

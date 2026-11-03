@@ -266,11 +266,10 @@ func runScraper(cmd *cobra.Command, args []string) {
 	}
 
 	// Step 4: Initialize metadata generator (not used in a dry run)
-	// Note: mediaRootDir is used directly, no longer needs cfg.Output.MediaDir subdirectory
 	gamelistPath := filepath.Join(gamelistDir, cfg.Output.GameListFile)
 	var gen *metadata.Generator
 	if !dryRun {
-		gen = metadata.NewGenerator(gamelistDir, mediaRootDir)
+		gen = metadata.NewGenerator()
 	}
 
 	// Step 5: Scrape each ROM
