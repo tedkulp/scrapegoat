@@ -98,7 +98,7 @@ scrapegoat scrape --platform <platform> --rom-dir <path>
 | `-r, --rom-dir` | (required) | ROM directory |
 | `-o, --gamelist-dir` | rom-dir | Where `gamelist.xml` is written |
 | `-m, --media-root-dir` | rom-dir | Root directory for media subdirectories |
-| `--cache-dir` | `~/.scrapegoat` | Cache for game lookups and media |
+| `--cache-dir` | `~/.scrapegoat` | Cache for the platform catalog, game lookups and media |
 | `-w, --workers` | `4` | Concurrent media download workers |
 | `--cache-hours` | `12` | Hours before cached platforms and game lookups expire |
 | `--force-redownload` | off | Re-download media files that already exist in the destination |

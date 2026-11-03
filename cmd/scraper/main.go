@@ -89,7 +89,7 @@ func init() {
 	scrapeCmd.Flags().StringVarP(&romDir, "rom-dir", "r", "", "ROM directory path (required)")
 	scrapeCmd.Flags().StringVarP(&gamelistDir, "gamelist-dir", "o", "", "directory for gamelist.xml output (default: same as rom-dir)")
 	scrapeCmd.Flags().StringVarP(&mediaRootDir, "media-root-dir", "m", "", "root directory for media files (default: same as rom-dir)")
-	scrapeCmd.Flags().StringVar(&cacheDir, "cache-dir", "", "cache directory for downloaded media (default: ~/.scrapegoat)")
+	scrapeCmd.Flags().StringVar(&cacheDir, "cache-dir", "", "cache directory for the platform catalog, game lookups and media (default: output.cache_dir, then ~/.scrapegoat)")
 	scrapeCmd.Flags().IntVarP(&workers, "workers", "w", 4, "number of concurrent download workers")
 	scrapeCmd.Flags().BoolVar(&dryRun, "dry-run", false, "scan and query API but don't download or write files")
 	scrapeCmd.Flags().StringVar(&autoDelete, "auto-delete", "", "automatically delete failed ROMs: true=delete, false=keep, unset=prompt (default: prompt)")
@@ -148,7 +148,7 @@ func runListPlatforms(cmd *cobra.Command, args []string) {
 	}
 
 	platforms := make([]platformInfo, 0, len(systems))
-	preferredRegions := []string{"us", "wor", "eu", "jp"}
+	preferredRegions := scraper.DefaultRegions()
 
 	for _, system := range systems {
 		fullName := system.GetPreferredName(preferredRegions)
@@ -215,6 +215,10 @@ func runScraper(cmd *cobra.Command, args []string) {
 	// Set cache expiration time for both platforms and ROM metadata
 	cfg.SetCacheExpiration(cacheHours)
 
+	// Resolve the cache directory before the platform lookup, so
+	// platforms.json lives in the same directory as every other cache.
+	cacheDir = resolveCacheDir(cfg, cacheDir, platformName)
+
 	// Get platform configuration
 	platform, err := cfg.GetPlatform(platformName)
 	if err != nil {
@@ -225,7 +229,6 @@ func runScraper(cmd *cobra.Command, args []string) {
 	romDir = expandPathTemplate(romDir, platformName)
 	gamelistDir = expandPathTemplate(gamelistDir, platformName)
 	mediaRootDir = expandPathTemplate(mediaRootDir, platformName)
-	cacheDir = expandPathTemplate(cacheDir, platformName)
 
 	// Set default directories to rom-dir if not specified
 	if gamelistDir == "" {
@@ -234,11 +237,6 @@ func runScraper(cmd *cobra.Command, args []string) {
 
 	if mediaRootDir == "" {
 		mediaRootDir = romDir
-	}
-
-	// Use cache directory from config if not specified via flag
-	if cacheDir == "" {
-		cacheDir = cfg.Output.CacheDir
 	}
 
 	// Override artwork config with command-line flag if provided
@@ -349,7 +347,7 @@ func runScraper(cmd *cobra.Command, args []string) {
 		}
 
 		game := result.Game
-		gameName := game.GetPreferredName([]string{"us", "wor", "eu", "jp"})
+		gameName := game.GetPreferredName(scraper.DefaultRegions())
 		if result.Cached {
 			logInfo("  Found: %s (cached)", gameName)
 		} else {
@@ -586,7 +584,7 @@ func filterExistingMediaFiles(mediaFiles []downloader.MediaFile, mediaRootDir st
 
 func buildMediaFileList(game *scraper.Game, romFilename string) []downloader.MediaFile {
 	var mediaFiles []downloader.MediaFile
-	preferredRegions := []string{"us", "wor", "eu", "jp"}
+	preferredRegions := scraper.DefaultRegions()
 
 	// Get ROM name without extension for media filenames
 	romName := strings.TrimSuffix(romFilename, filepath.Ext(romFilename))
@@ -641,6 +639,19 @@ func logVerbose(format string, args ...interface{}) {
 
 func logError(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
+}
+
+// resolveCacheDir returns the effective cache directory: the --cache-dir
+// flag with {platform} expanded if given, otherwise output.cache_dir from
+// the config. It stores the result in cfg.Output.CacheDir so the platform
+// cache (platforms.json) uses it too.
+func resolveCacheDir(cfg *config.Config, flagValue, platformName string) string {
+	dir := expandPathTemplate(flagValue, platformName)
+	if dir == "" {
+		dir = cfg.Output.CacheDir
+	}
+	cfg.Output.CacheDir = dir
+	return dir
 }
 
 // expandPathTemplate replaces template variables in a path string

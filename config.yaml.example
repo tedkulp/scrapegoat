@@ -15,7 +15,7 @@ screenscraper:
 
 # Platform/System definitions (OPTIONAL)
 # Platforms are now automatically fetched from ScreenScraper.fr API and cached locally.
-# The cache is stored in ~/.scrapegoat/platforms.json and refreshed every 12 hours.
+# The cache is stored in <cache_dir>/platforms.json (or <--cache-dir>/platforms.json) and refreshed every 12 hours.
 # You can still define platforms here if you want to override the API data or work offline.
 #
 # System IDs can be found at: https://www.screenscraper.fr/systemelist.php
@@ -32,7 +32,7 @@ screenscraper:
 output:
   gamelist_file: "gamelist.xml"
   media_dir: "media"
-  # cache_dir: "~/.scrapegoat"  # Default: ~/.scrapegoat - persistent cache for downloaded media
+  # cache_dir: "~/.scrapegoat"  # Default: ~/.scrapegoat - holds platforms.json, game lookups and media; --cache-dir overrides it
 
 # Artwork generation settings (OPTIONAL)
 # Generate custom composed artwork from downloaded media files
