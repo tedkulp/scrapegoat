@@ -118,13 +118,25 @@ func runListPlatforms(cmd *cobra.Command, args []string) {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	catalog := newPlatformCatalog(cfg, cfg.Output.CacheDir, defaultCacheHours)
+	catalog := newPlatformCatalog(cfg, listPlatformsCacheDir(cfg.Output.CacheDir), defaultCacheHours)
 	if err := listPlatforms(os.Stdout, catalog); err != nil {
 		log.Fatalf("Failed to list platforms: %v", err)
 	}
 
 	logInfo("\nTo use a platform, specify the slug with the --platform flag.")
 	logInfo("Example: scrapegoat scrape --platform nes --rom-dir /path/to/roms")
+}
+
+// listPlatformsCacheDir is the cache dir list-platforms uses for the config's
+// cache_dir. list-platforms has no --platform to expand {platform} with, so
+// the path is cut before the first element containing it: the parent of the
+// per-platform caches, never a directory literally named {platform}.
+func listPlatformsCacheDir(cacheDir string) string {
+	dir := cacheDir
+	for strings.Contains(dir, "{platform}") {
+		dir = filepath.Dir(dir)
+	}
+	return dir
 }
 
 // listPlatforms writes the platform catalog as a table, one platform per row

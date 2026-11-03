@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -103,5 +104,23 @@ func TestListPlatforms_FreshCacheMakesNoRequest(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "nes") {
 		t.Fatalf("cached platform missing:\n%s", out.String())
+	}
+}
+
+func TestListPlatformsCacheDir_DropsThePlatformElement(t *testing.T) {
+	tests := []struct {
+		in, want string
+	}{
+		{"/home/u/.scrapegoat", "/home/u/.scrapegoat"},
+		{"/home/u/.scrapegoat/{platform}", "/home/u/.scrapegoat"},
+		{"/home/u/.scrapegoat/{platform}/", "/home/u/.scrapegoat"},
+		{"/home/u/.scrapegoat/cache-{platform}/x", "/home/u/.scrapegoat"},
+		{"/home/u/{platform}/.scrapegoat", "/home/u"},
+		{"{platform}", "."},
+	}
+	for _, tt := range tests {
+		if got := listPlatformsCacheDir(filepath.FromSlash(tt.in)); got != filepath.FromSlash(tt.want) {
+			t.Errorf("listPlatformsCacheDir(%q) = %q, want %q", tt.in, got, tt.want)
+		}
 	}
 }

@@ -139,7 +139,7 @@ scrapegoat scrape --platform n64 --rom-dir ~/roms/n64 \
 scrapegoat list-platforms
 ```
 
-Prints every platform with its ID, slug, name and file extensions: platforms defined in `config.yaml` first, marked `(config)`, then ScreenScraper's by ID. The listed slug always picks that row's platform with `--platform`. ScreenScraper's list is read from `platforms.json` in `output.cache_dir` (default `~/.scrapegoat`) and fetched again only when that file is older than 12 hours.
+Prints every platform with its ID, slug, name and file extensions: platforms defined in `config.yaml` first, marked `(config)`, then ScreenScraper's by ID. The listed slug always picks that row's platform with `--platform`. ScreenScraper's list is read from `platforms.json` in `output.cache_dir` (default `~/.scrapegoat`) and fetched again only when that file is older than 12 hours. When `cache_dir` contains `{platform}`, `list-platforms` uses the directory above the `{platform}` element (see [Caching](#caching)).
 
 ```
 ID    Slug                      Platform Name                  Extensions
@@ -213,7 +213,7 @@ With artwork enabled, each artwork output writes `<media-root-dir>/<output_dir>/
 
 ## Caching
 
-All caches live under `--cache-dir`, or `output.cache_dir` from the config file when the flag is not given (default `~/.scrapegoat`). `{platform}` is expanded in both, so `cache_dir: ~/.scrapegoat/{platform}` gives each platform its own cache:
+All caches live under `--cache-dir`, or `output.cache_dir` from the config file when the flag is not given (default `~/.scrapegoat`). `{platform}` is expanded in both, so `cache_dir: ~/.scrapegoat/{platform}` gives each platform its own cache. `list-platforms` has no `--platform`, so it cuts `cache_dir` before the first path element containing `{platform}` and keeps its `platforms.json` there (`~/.scrapegoat` in this example); it never creates a directory named `{platform}`:
 
 | What | Where | Expires |
 |---|---|---|
