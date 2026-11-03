@@ -42,7 +42,7 @@ func (g *Generator) SetPreferredLanguages(languages []string) {
 }
 
 // AddGameFromScraper converts ScreenScraper game data to gamelist.xml entry
-func (g *Generator) AddGameFromScraper(romPath string, game *scraper.Game) error {
+func (g *Generator) AddGameFromScraper(romPath string, game *scraper.Game) {
 	// ROM path should be relative to gamelist.xml location (which is in romDir)
 	// EmulationStation expects paths like "./GameName.zip"
 	romFilename := filepath.Base(romPath)
@@ -75,7 +75,6 @@ func (g *Generator) AddGameFromScraper(romPath string, game *scraper.Game) error
 	// - Files should match the ROM name (without extension)
 
 	g.gameList.AddGame(gameEntry)
-	return nil
 }
 
 // AddGame adds a game entry directly
