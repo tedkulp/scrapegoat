@@ -350,3 +350,47 @@ func TestScrape_NonGameCarriesTheGameAndPlacesNothing(t *testing.T) {
 		t.Errorf("%d media requests, want 0", n)
 	}
 }
+
+func TestScrape_ReportsProgressBeforeEachSlowStep(t *testing.T) {
+	cases := []struct {
+		name    string
+		outcome screenscraper.Outcome
+		art     bool
+		mode    media.Mode
+		want    []Step
+	}{
+		{"scraped with artwork", screenscraper.OutcomeMatch, true, media.Mode{}, []Step{StepHash, StepLookup, StepPlace, StepArtwork}},
+		{"scraped without artwork", screenscraper.OutcomeMatch, false, media.Mode{}, []Step{StepHash, StepLookup, StepPlace}},
+		{"dry run", screenscraper.OutcomeMatch, true, media.Mode{DryRun: true}, []Step{StepHash, StepLookup}},
+		{"not found", screenscraper.OutcomeNotFound, true, media.Mode{}, []Step{StepHash, StepLookup}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newEnv(t)
+			lookup := &fakeLookup{result: screenscraper.LookupResult{Outcome: tc.outcome, Game: e.game()}}
+			var compositor *artwork.Compositor
+			if tc.art {
+				compositor = e.compositor()
+			}
+			var got []Step
+			var placing *media.Plan
+			s := New(lookup, e.placer(), compositor, systemID, tc.mode, WithProgress(func(step Step, plan *media.Plan) {
+				got = append(got, step)
+				if step == StepPlace {
+					placing = plan
+				}
+			}))
+
+			res, err := s.Scrape(e.rom("Super Game (USA).nes", "rom bytes"))
+			if err != nil {
+				t.Fatalf("Scrape: %v", err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("steps = %v, want %v", got, tc.want)
+			}
+			if placing != nil && len(placing.Items) != len(res.Plan.Items) {
+				t.Errorf("StepPlace got a plan of %d items, want %d", len(placing.Items), len(res.Plan.Items))
+			}
+		})
+	}
+}

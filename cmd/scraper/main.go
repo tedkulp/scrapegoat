@@ -286,7 +286,8 @@ func runScraper(cmd *cobra.Command, args []string) {
 	// Step 5: Scrape each ROM
 	loop := &romLoop{
 		scraper: scrape.New(scraperClient, placer, compositor, platform.ID,
-			media.Mode{DryRun: dryRun, Force: settings.ForceRedownload}),
+			media.Mode{DryRun: dryRun, Force: settings.ForceRedownload},
+			scrape.WithProgress(logProgress)),
 		cutoff:       cut,
 		gen:          gen,
 		gamelistPath: gamelistPath,
@@ -422,6 +423,20 @@ func mediaSummary(r media.Result) string {
 
 func logInfo(format string, args ...interface{}) {
 	fmt.Printf(format+"\n", args...)
+}
+
+// logProgress prints, with --verbose, which slow step of a scrape is starting.
+func logProgress(step scrape.Step, plan *media.Plan) {
+	switch step {
+	case scrape.StepHash:
+		logVerbose("  Computing hashes...")
+	case scrape.StepLookup:
+		logVerbose("  Querying ScreenScraper API...")
+	case scrape.StepPlace:
+		logVerbose("  Placing %d media files (%d already exist)...", len(plan.Items), plan.Count(media.SourceExisting))
+	case scrape.StepArtwork:
+		logVerbose("  Generating artwork...")
+	}
 }
 
 func logVerbose(format string, args ...interface{}) {

@@ -110,6 +110,30 @@ type Result struct {
 	Artwork artwork.Result
 }
 
+// Step is a slow step of a scrape.
+type Step int
+
+const (
+	StepHash Step = iota
+	StepLookup
+	StepPlace
+	StepArtwork
+)
+
+func (s Step) String() string {
+	switch s {
+	case StepHash:
+		return "hash"
+	case StepLookup:
+		return "lookup"
+	case StepPlace:
+		return "place"
+	case StepArtwork:
+		return "artwork"
+	}
+	return fmt.Sprintf("Step(%d)", int(s))
+}
+
 // Scraper scrapes ROMs of one platform.
 type Scraper struct {
 	lookup     Lookup
@@ -117,19 +141,36 @@ type Scraper struct {
 	compositor *artwork.Compositor
 	systemID   int
 	mode       media.Mode
+	progress   func(Step, *media.Plan)
+}
+
+// Option configures a Scraper.
+type Option func(*Scraper)
+
+// WithProgress calls fn just before each slow step of a scrape starts. plan is
+// the media plan about to be placed for StepPlace, and nil otherwise.
+func WithProgress(fn func(step Step, plan *media.Plan)) Option {
+	return func(s *Scraper) { s.progress = fn }
 }
 
 // New returns a Scraper. compositor may be nil, which disables artwork.
-func New(lookup Lookup, placer *media.Placer, compositor *artwork.Compositor, systemID int, mode media.Mode) *Scraper {
-	return &Scraper{lookup: lookup, placer: placer, compositor: compositor, systemID: systemID, mode: mode}
+func New(lookup Lookup, placer *media.Placer, compositor *artwork.Compositor, systemID int, mode media.Mode, opts ...Option) *Scraper {
+	s := &Scraper{lookup: lookup, placer: placer, compositor: compositor, systemID: systemID, mode: mode,
+		progress: func(Step, *media.Plan) {}}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // Scrape scrapes one ROM.
 func (s *Scraper) Scrape(rom scanner.ROMFile) (Result, error) {
+	s.progress(StepHash, nil)
 	hashes, err := screenscraper.HashROMFile(rom.Path)
 	if err != nil {
 		return Result{}, &Failure{Stage: StageHash, Err: err}
 	}
+	s.progress(StepLookup, nil)
 	answer, err := s.lookup.Lookup(s.systemID, rom.Filename, hashes)
 	if err != nil {
 		var ce *cutoff.Error
@@ -153,8 +194,10 @@ func (s *Scraper) Scrape(rom scanner.ROMFile) (Result, error) {
 		res.DryRun = true
 		return res, nil
 	}
+	s.progress(StepPlace, &res.Plan)
 	res.Media = s.placer.Execute(res.Plan)
 	if s.compositor != nil && len(res.Media.Placed) > 0 {
+		s.progress(StepArtwork, nil)
 		romName := strings.TrimSuffix(rom.Filename, filepath.Ext(rom.Filename))
 		res.Artwork = s.compositor.GenerateArtwork(romName, artwork.MediaFiles(res.Media.Placed), s.placer.Root())
 	}

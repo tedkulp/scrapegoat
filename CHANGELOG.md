@@ -29,7 +29,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The end-of-run list says "Unmatched" instead of "Failed": `=== Unmatched ROMs ===`.
 - `scrape` exits with status 1 after a cutoff, once `gamelist.xml` is written. The summary adds `Deferred: N` and the cause.
 - The run summary counts each scrape outcome separately: `Scraped: N`, `Not found: N`, `Non-game: N` and `Failed: N` (a ROM that could not be hashed or looked up), instead of `Successful` and one combined count. "Average API calls per ROM" divides by the scraped count.
-- `--verbose` no longer prints the "Computing hashes...", "Querying ScreenScraper API...", "Placing N media files..." and "Generating artwork..." progress lines; the hashes, media and artwork lines that follow each step are unchanged.
 - Platform slugs follow one set of rules for `--platform` and `list-platforms`: one slug per platform name, the lower platform ID wins a shared slug, aliases beat name slugs, and `config.yaml` platforms beat both. Every slug `list-platforms` shows picks that row's platform. The long joined-up slugs made from all of a platform's names (such as `atari2600a26002600`) are gone.
 - `list-platforms` reads the cached `platforms.json` instead of calling the API every time, and also lists `config.yaml` platforms, marked `(config)`.
 - `config.yaml` platform slugs are matched without regard to case, like ScreenScraper's.
