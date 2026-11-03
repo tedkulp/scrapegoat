@@ -41,7 +41,7 @@
 - Config loading uses Viper with YAML
 - HTTP client uses 30s timeout, retry logic with exponential backoff (3 attempts, 2s then 4s)
 - File paths use `filepath` package, always handle both absolute and relative paths
-- Media downloads use worker pool pattern with channels
-- Cache uses JSON files in `~/.scrapegoat/` with MD5-based filenames
+- Media downloads use worker pool pattern with channels (`media.Placer.Execute` in `internal/media/media.go`)
+- Game cache uses JSON files in `<cache-dir>/games/` (default `~/.scrapegoat`) named by the ROM's MD5
 - ZIP files are extracted in-memory for hashing (see `internal/screenscraper/hasher.go:72-144`)
-- Prefer region/language fallback patterns (see `internal/screenscraper/types.go:103-190`)
+- Prefer region/language fallback patterns (see `internal/screenscraper/types.go:98-193`)
