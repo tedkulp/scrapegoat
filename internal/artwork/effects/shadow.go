@@ -8,6 +8,7 @@ import (
 	"math"
 
 	"github.com/disintegration/imaging"
+	"github.com/tedkulp/scrapegoat/internal/artwork"
 )
 
 // ShadowEffect adds a drop shadow
@@ -26,18 +27,18 @@ func (e *ShadowEffect) Validate(params map[string]interface{}) error {
 
 // Apply adds a drop shadow to an image
 func (e *ShadowEffect) Apply(img image.Image, params map[string]interface{}) (image.Image, error) {
-	distance := getIntParam(params, "distance", 5)
-	softness := getFloat64Param(params, "softness", 5.0)
-	opacity := getIntParam(params, "opacity", 70)
-	angle := getFloat64Param(params, "angle", 135.0) // Default: bottom-right
-	colorStr := getStringParam(params, "color", "#000000")
+	distance := artwork.IntParam(params, "distance", 5)
+	softness := artwork.Float64Param(params, "softness", 5.0)
+	opacity := artwork.IntParam(params, "opacity", 70)
+	angle := artwork.Float64Param(params, "angle", 135.0) // Default: bottom-right
+	colorStr := artwork.StringParam(params, "color", "#000000")
 
 	if distance <= 0 {
 		return img, nil
 	}
 
 	// Parse shadow color
-	shadowColor, err := parseColor(colorStr)
+	shadowColor, err := artwork.ParseColor(colorStr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid shadow color: %v", err)
 	}

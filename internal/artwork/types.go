@@ -15,12 +15,29 @@ type Config struct {
 
 // OutputDefinition defines a single output image to generate
 type OutputDefinition struct {
-	Type       string            `mapstructure:"type"`        // Output type (e.g., "screenshot", "marquee")
-	Width      int               `mapstructure:"width"`       // Target width in pixels (0 = auto)
-	Height     int               `mapstructure:"height"`      // Target height in pixels (0 = auto)
-	Format     string            `mapstructure:"format"`      // Output format: "png", "jpg", "webp"
-	Background string            `mapstructure:"background"`  // Background color (hex) or "transparent"
-	Layers     []LayerDefinition `mapstructure:"layers"`      // Layers to composite (bottom to top)
+	Type       string            `mapstructure:"type"`       // Output name, used in logs and errors (e.g., "miximage", "marquee")
+	OutputDir  string            `mapstructure:"output_dir"` // Folder under the media root (default: the global artwork output_dir)
+	Width      int               `mapstructure:"width"`      // Target width in pixels (0 = auto)
+	Height     int               `mapstructure:"height"`     // Target height in pixels (0 = auto)
+	Format     string            `mapstructure:"format"`     // Output format: "png" (default) or "jpg"
+	Background string            `mapstructure:"background"` // Background color (hex) or "transparent"
+	Layers     []LayerDefinition `mapstructure:"layers"`     // Layers to composite (bottom to top)
+}
+
+// fileFormat is the output's file extension; an empty format means png.
+func (d OutputDefinition) fileFormat() string {
+	if d.Format == "" {
+		return "png"
+	}
+	return d.Format
+}
+
+// outputDirFor is the folder, relative to the media root, an output writes to.
+func (c Config) outputDirFor(def OutputDefinition) string {
+	if def.OutputDir != "" {
+		return def.OutputDir
+	}
+	return c.OutputDir
 }
 
 // LayerDefinition defines a single layer in the composition
