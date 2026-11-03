@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A ROM ScreenScraper answers with 404 counts as not found and is cached like any other not-found result, so re-runs don't look it up again until `--cache-hours` passes.
 - The 1-second wait applies between HTTP requests to ScreenScraper, not after every ROM, so ROMs answered from the cache no longer wait.
 - The remaining-quota count shown during `scrape` also updates from the platform list request.
+- `--auto-delete` and `--artwork` accept `1`/`0` (any `strconv.ParseBool` value) as well as `true`/`false`. An unrecognised value, or `--cache-hours` of 0 or less, now stops the run with an error naming the flag instead of being silently ignored.
+- `{platform}` is expanded in `output.cache_dir` from the config file, not only in flag paths.
+- The end-of-run list and summary say "Unmatched" instead of "Failed": `=== Unmatched ROMs ===` and `Unmatched: N`.
 
 ### Fixed
 

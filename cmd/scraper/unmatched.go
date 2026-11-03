@@ -29,19 +29,19 @@ func (d unmatchedDisposition) String() string {
 	}
 }
 
-// unmatchedRemoval is an unmatched ROM the remover could not delete.
-type unmatchedRemoval struct {
+// removalFailure is an unmatched ROM the remover could not delete.
+type removalFailure struct {
 	ROM scanner.ROMFile
 	Err error
 }
 
-// unmatchedDisposal reports what disposeUnmatchedROMs did.
-type unmatchedDisposal struct {
+// disposalResult reports what disposeUnmatchedROMs did.
+type disposalResult struct {
 	// Deleting is true when the ROMs were to be deleted: the disposition
 	// was delete, or it was ask and the user answered yes.
 	Deleting bool
 	Deleted  []scanner.ROMFile
-	Failed   []unmatchedRemoval
+	Failed   []removalFailure
 }
 
 // disposeUnmatchedROMs applies the disposition to the unmatched ROMs. For
@@ -49,8 +49,8 @@ type unmatchedDisposal struct {
 // surrounding space ignored) deletes, and a read error keeps. A remover error
 // on one ROM does not stop the others. It logs nothing: the caller reports
 // from the result.
-func disposeUnmatchedROMs(d unmatchedDisposition, roms []scanner.ROMFile, prompt func() (string, error), remove func(path string) error) unmatchedDisposal {
-	var res unmatchedDisposal
+func disposeUnmatchedROMs(d unmatchedDisposition, roms []scanner.ROMFile, prompt func() (string, error), remove func(path string) error) disposalResult {
+	var res disposalResult
 	switch d {
 	case dispositionDelete:
 		res.Deleting = true
@@ -66,7 +66,7 @@ func disposeUnmatchedROMs(d unmatchedDisposition, roms []scanner.ROMFile, prompt
 	}
 	for _, rom := range roms {
 		if err := remove(rom.Path); err != nil {
-			res.Failed = append(res.Failed, unmatchedRemoval{ROM: rom, Err: err})
+			res.Failed = append(res.Failed, removalFailure{ROM: rom, Err: err})
 		} else {
 			res.Deleted = append(res.Deleted, rom)
 		}

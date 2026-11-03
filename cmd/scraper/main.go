@@ -64,8 +64,7 @@ var versionCmd = &cobra.Command{
 	},
 }
 
-// scrapeFlagValues holds the scrape command's raw flag values. Only flag registration
-// and resolveScrapeSettings read it; runScraper works from scrapeSettings.
+// scrapeFlagValues is what Cobra binds the scrape flags into.
 var scrapeFlagValues scrapeFlags
 
 func init() {
