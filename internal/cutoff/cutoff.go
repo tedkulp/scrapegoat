@@ -46,6 +46,16 @@ func (c Cause) String() string {
 	return fmt.Sprintf("%s (%d)", name, c.StatusCode)
 }
 
+// BodyExcerpt is the start of a response body for an error message: trimmed,
+// and cut to 200 bytes with "..." when longer.
+func BodyExcerpt(body string) string {
+	body = strings.TrimSpace(body)
+	if len(body) > 200 {
+		body = body[:200] + "..."
+	}
+	return body
+}
+
 // Cutoff is a run's cutoff state. It is safe for concurrent use; the zero
 // value has not been tripped.
 type Cutoff struct {
@@ -59,10 +69,7 @@ func New() *Cutoff { return &Cutoff{} }
 // Trip records a cutoff caused by a response with status and body. Only the
 // first call records its cause; Trip reports whether this call was it.
 func (c *Cutoff) Trip(status int, body string) bool {
-	body = strings.TrimSpace(body)
-	if len(body) > 200 {
-		body = body[:200] + "..."
-	}
+	body = BodyExcerpt(body)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.cause != nil {

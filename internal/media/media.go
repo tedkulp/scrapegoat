@@ -367,7 +367,7 @@ func (p *Placer) fetch(it Item) error {
 		p.debugf("MEDIA: %s - DEFERRED (cutoff, no API call)", it.MediaType)
 		return &cutoff.Error{Cause: cause}
 	}
-	p.debugf("MEDIA: %s - DOWNLOADING (API call) %s", it.MediaType, redactURL(it.URL))
+	p.debugf("MEDIA: %s - DOWNLOADING (API call) %s", it.MediaType, screenscraper.RedactURL(it.URL))
 	resp, err := p.httpClient.Get(it.URL)
 	if err != nil {
 		return fmt.Errorf("download %s: %w", it.MediaType, redactErr(err))
@@ -424,21 +424,6 @@ func writeAtomic(path string, r io.Reader) (err error) {
 		return err
 	}
 	return os.Rename(tmp.Name(), path)
-}
-
-func redactURL(raw string) string {
-	u, err := url.Parse(raw)
-	if err != nil {
-		return "<unparseable URL>"
-	}
-	q := u.Query()
-	for _, k := range []string{"devpassword", "sspassword"} {
-		if q.Has(k) {
-			q.Set(k, "***")
-		}
-	}
-	u.RawQuery = strings.ReplaceAll(q.Encode(), "%2A%2A%2A", "***")
-	return u.String()
 }
 
 func redactErr(err error) error {

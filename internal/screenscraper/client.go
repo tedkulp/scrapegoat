@@ -315,14 +315,24 @@ func (c *Client) throttledGet(apiURL string) (*http.Response, error) {
 }
 
 func redactedURL(endpoint string, params url.Values) string {
-	redacted := url.Values{}
-	for k, v := range params {
-		redacted[k] = v
+	return RedactURL(endpointURL(endpoint, params.Encode()))
+}
+
+// RedactURL returns a ScreenScraper URL with its devpassword and sspassword
+// values replaced by ***, for logging.
+func RedactURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "<unparseable URL>"
 	}
-	redacted.Set("devpassword", "***")
-	redacted.Set("sspassword", "***")
-	query := strings.ReplaceAll(redacted.Encode(), "%2A%2A%2A", "***")
-	return endpointURL(endpoint, query)
+	q := u.Query()
+	for _, k := range []string{"devpassword", "sspassword"} {
+		if q.Has(k) {
+			q.Set(k, "***")
+		}
+	}
+	u.RawQuery = strings.ReplaceAll(q.Encode(), "%2A%2A%2A", "***")
+	return u.String()
 }
 
 func endpointURL(endpoint, query string) string {
@@ -353,10 +363,7 @@ func (e *StatusError) Error() string {
 		cause = "ScreenScraper returned an unexpected status"
 	}
 	msg := fmt.Sprintf("%s (%d)", cause, e.StatusCode)
-	if body := strings.TrimSpace(e.Body); body != "" {
-		if len(body) > 200 {
-			body = body[:200] + "..."
-		}
+	if body := cutoff.BodyExcerpt(e.Body); body != "" {
 		msg += ": " + body
 	}
 	return msg

@@ -93,3 +93,19 @@ func TestError_MatchesWithErrorsAsAndUnwraps(t *testing.T) {
 		t.Error("cutoff error does not unwrap to the response error")
 	}
 }
+
+func TestBodyExcerpt(t *testing.T) {
+	long := ""
+	for len(long) < 250 {
+		long += "x"
+	}
+	tests := []struct{ in, want string }{
+		{"  short \n", "short"},
+		{long, long[:200] + "..."},
+	}
+	for _, tt := range tests {
+		if got := BodyExcerpt(tt.in); got != tt.want {
+			t.Errorf("BodyExcerpt(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
