@@ -46,7 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An interrupted media download no longer leaves a partial file that later runs serve from the cache. An empty cached file is downloaded again.
 - Artwork is always written to `<media-root>/<dir>/<rom-name>.<format>`, whether it was just composed or came from the artwork cache. `<dir>` is the output's new optional `output_dir`, or `artwork.output_dir`. Older runs may have left `<rom-name>-<type>.<format>` files in the artwork folder; they are not removed and can be deleted by hand.
 - The artwork cache key no longer changes between runs, so unchanged artwork is copied from the cache instead of being composed again. Existing artwork cache entries are rebuilt once.
-- Two artwork outputs writing the same format to the same folder, and layer resources that are not a media type or `custom:<path>`, are rejected when `config.yaml` loads instead of silently overwriting each other or producing no artwork. `config.yaml.example` now uses real media type names.
+- Two artwork outputs writing the same format to the same folder, and layer resources that are not a media type or `custom:<path>`, are rejected before scraping when artwork is enabled (`artwork.enabled: true` or `--artwork`), instead of silently overwriting each other or producing no artwork. So is an output whose folder is a media type folder. A disabled artwork section is not checked, so it never stops a command. `config.yaml.example` now uses real media type names.
 - A failing artwork output no longer discards the other outputs for that ROM.
 
 ### Security

@@ -44,7 +44,8 @@ type scrapeSettings struct {
 // run's settings. Defaults are applied first (gamelist dir and media root
 // fall back to the ROM dir, the cache dir to the config's cache_dir), then
 // {platform} is expanded, so the placeholder also works in cache_dir from
-// the config file. It neither reads nor changes anything else.
+// the config file. The artwork configuration is validated only when artwork
+// ends up enabled. It neither reads nor changes anything else.
 func resolveScrapeSettings(flags scrapeFlags, cfg *config.Config) (scrapeSettings, error) {
 	disposition, err := parseDisposition(flags.autoDelete)
 	if err != nil {
@@ -56,6 +57,11 @@ func resolveScrapeSettings(flags scrapeFlags, cfg *config.Config) (scrapeSetting
 		return scrapeSettings{}, err
 	} else if set {
 		artworkEnabled = v
+	}
+	if artworkEnabled {
+		if err := cfg.Artwork.Validate(); err != nil {
+			return scrapeSettings{}, fmt.Errorf("invalid artwork configuration: %w", err)
+		}
 	}
 
 	if flags.cacheHours <= 0 {

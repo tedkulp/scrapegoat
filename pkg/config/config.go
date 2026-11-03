@@ -42,7 +42,9 @@ type OutputConfig struct {
 	CacheDir     string `mapstructure:"cache_dir"`
 }
 
-// Load reads configuration from file and environment variables
+// Load reads configuration from file and environment variables. It does not
+// validate the artwork section: that is checked only when a scrape runs with
+// artwork enabled, so a disabled artwork block never stops a command.
 func Load(configPath string) (*Config, error) {
 	v := viper.New()
 
@@ -109,9 +111,5 @@ func Load(configPath string) (*Config, error) {
 	if config.ScreenScraper.UserPassword == "" {
 		return nil, fmt.Errorf("screenscraper.user_password is required")
 	}
-	if err := config.Artwork.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid artwork configuration: %w", err)
-	}
-
 	return &config, nil
 }

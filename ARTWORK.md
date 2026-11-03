@@ -354,7 +354,7 @@ Older versions wrote `{rom-name}-{type}.{format}` when the artwork came from the
 
 ### Configuration Errors
 
-The artwork configuration is checked when `config.yaml` is loaded, before any scraping, even when artwork is disabled. Loading fails when:
+When artwork is enabled (`artwork.enabled: true`, or `--artwork` resolved to true), `scrape` checks the artwork configuration before scanning any ROM. With artwork disabled the section is not checked, and `list-platforms` and `user-info` never check it, so an unused artwork block never stops a command. The scrape stops with an error when:
 
 - **Two outputs write the same folder and format.** They would overwrite each other's files. The error names both outputs; give one of them its own `output_dir` or a different `format`.
 - **An output writes to a media type folder**, such as `output_dir: screenshots`. It would overwrite the downloaded media and read its own artwork back as a layer. The error names the output and the folder; give it its own `output_dir`, such as `miximages`. The check ignores case.

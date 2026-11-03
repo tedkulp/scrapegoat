@@ -24,8 +24,8 @@ func loadYAML(t *testing.T, artworkYAML string) (*Config, error) {
 	return Load(path)
 }
 
-func TestLoadAcceptsMediaTypeAndCustomResources(t *testing.T) {
-	cfg, err := loadYAML(t, `
+func TestAcceptsMediaTypeAndCustomResources(t *testing.T) {
+	cfg, err := loadArtwork(t, `
 artwork:
   output_dir: miximages
   outputs:
@@ -67,7 +67,7 @@ func TestExampleArtworkConfigLoads(t *testing.T) {
 		section.WriteString("\n")
 	}
 
-	cfg, err := loadYAML(t, section.String())
+	cfg, err := loadArtwork(t, section.String())
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -76,8 +76,33 @@ func TestExampleArtworkConfigLoads(t *testing.T) {
 	}
 }
 
-func TestLoadRejectsOutputsWithSameFolderAndFormat(t *testing.T) {
+// loadArtwork loads the config and validates its artwork section, as a scrape
+// with artwork enabled does.
+func loadArtwork(t *testing.T, artworkYAML string) (*Config, error) {
+	t.Helper()
+	cfg, err := loadYAML(t, artworkYAML)
+	if err != nil {
+		return nil, err
+	}
+	return cfg, cfg.Artwork.Validate()
+}
+
+func TestLoadDoesNotValidateArtwork(t *testing.T) {
 	_, err := loadYAML(t, `
+artwork:
+  enabled: false
+  outputs:
+    - type: mix
+      layers:
+        - resource: cover
+`)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+}
+
+func TestRejectsOutputsWithSameFolderAndFormat(t *testing.T) {
+	_, err := loadArtwork(t, `
 artwork:
   output_dir: miximages
   outputs:
@@ -101,8 +126,8 @@ artwork:
 	}
 }
 
-func TestLoadAcceptsSameFolderWithDifferentFormats(t *testing.T) {
-	_, err := loadYAML(t, `
+func TestAcceptsSameFolderWithDifferentFormats(t *testing.T) {
+	_, err := loadArtwork(t, `
 artwork:
   outputs:
     - type: first
@@ -119,8 +144,8 @@ artwork:
 	}
 }
 
-func TestLoadRejectsUnknownLayerResource(t *testing.T) {
-	_, err := loadYAML(t, `
+func TestRejectsUnknownLayerResource(t *testing.T) {
+	_, err := loadArtwork(t, `
 artwork:
   outputs:
     - type: mix

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tedkulp/scrapegoat/internal/artwork"
 	"github.com/tedkulp/scrapegoat/pkg/config"
 )
 
@@ -199,5 +200,42 @@ func TestResolveScrapeSettings_CopiesScalars(t *testing.T) {
 	}
 	if s.PlatformName != "nes" || s.Workers != 7 || !s.DryRun || !s.ForceRedownload || s.CacheHours != 3 {
 		t.Errorf("got %+v", s)
+	}
+}
+
+func invalidArtworkConfig(enabled bool) *config.Config {
+	cfg := testConfig()
+	cfg.Artwork.Enabled = enabled
+	cfg.Artwork.Outputs = []artwork.OutputDefinition{
+		{Type: "mix", Layers: []artwork.LayerDefinition{{Resource: "cover"}}},
+	}
+	return cfg
+}
+
+func TestResolveScrapeSettings_ValidatesArtworkOnlyWhenEnabled(t *testing.T) {
+	tests := []struct {
+		name          string
+		configEnabled bool
+		flag          string
+		wantErr       bool
+	}{
+		{"disabled in config", false, "", false},
+		{"disabled by flag", true, "false", false},
+		{"enabled in config", true, "", true},
+		{"enabled by flag", false, "true", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := validFlags()
+			f.artwork = tt.flag
+			_, err := resolveScrapeSettings(f, invalidArtworkConfig(tt.configEnabled))
+			if tt.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "cover") {
+					t.Fatalf("err = %v, want an artwork error naming the resource", err)
+				}
+			} else if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
 	}
 }
