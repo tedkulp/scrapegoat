@@ -10,6 +10,11 @@ import (
 	"github.com/tedkulp/scrapegoat/internal/cutoff"
 )
 
+const (
+	notFoundBody = `{"response":{}}`
+	nonGameBody  = `{"response":{"jeu":{"id":"7","noms":[{"region":"wor","text":"ZZZ(notgame):#NONGAME"}]}}}`
+)
+
 var otherHashes = &ROMHashes{
 	CRC32: "cafebabe",
 	MD5:   "fedcba9876543210fedcba9876543210",
@@ -70,15 +75,19 @@ func TestCutoffTrippedElsewhereStopsLookupBeforeAnyRequest(t *testing.T) {
 	}
 }
 
-func TestExpiredCacheEntryAnswersAfterCutoffButNotBefore(t *testing.T) {
+func TestExpiredCacheEntryAfterCutoff(t *testing.T) {
+	// An expired match still answers after a cutoff. An expired not-found or
+	// non-game entry does not: ScreenScraper may know the ROM by now, and
+	// answering would make it an unmatched ROM that --auto-delete removes.
 	cases := []struct {
-		name    string
-		body    string
-		outcome Outcome
+		name     string
+		body     string
+		outcome  Outcome
+		answered bool
 	}{
-		{"match", matchBody, OutcomeMatch},
-		{"not found", `{"response":{}}`, OutcomeNotFound},
-		{"non-game", `{"response":{"jeu":{"id":"7","noms":[{"region":"wor","text":"ZZZ(notgame):#NONGAME"}]}}}`, OutcomeNonGame},
+		{"match", matchBody, OutcomeMatch, true},
+		{"not found", notFoundBody, OutcomeNotFound, false},
+		{"non-game", nonGameBody, OutcomeNonGame, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -107,16 +116,69 @@ func TestExpiredCacheEntryAnswersAfterCutoffButNotBefore(t *testing.T) {
 				WithCache(cacheDir, 12), WithCutoff(tripped()))
 			after.clock.now = expired.Add(13 * time.Hour)
 			res, err := after.client.Lookup(3, "rom.nes", testHashes)
+			if after.calls != 0 {
+				t.Errorf("after cutoff: want no requests, got %d", after.calls)
+			}
+			if !tc.answered {
+				var ce *cutoff.Error
+				if !errors.As(err, &ce) {
+					t.Fatalf("after cutoff: want *cutoff.Error, got %+v, %v", res, err)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("after cutoff: want the cached outcome, got %v", err)
 			}
 			if res.Outcome != tc.outcome || !res.Cached {
 				t.Errorf("after cutoff: got %v cached=%v, want %v cached", res.Outcome, res.Cached, tc.outcome)
 			}
-			if after.calls != 0 {
-				t.Errorf("after cutoff: want no requests, got %d", after.calls)
+		})
+	}
+}
+
+func TestFreshCacheEntryAnswersAfterCutoff(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		body    string
+		outcome Outcome
+	}{
+		{"not found", notFoundBody, OutcomeNotFound},
+		{"non-game", nonGameBody, OutcomeNonGame},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cacheDir := t.TempDir()
+			seed := newHarness(t, func(int) *http.Response { return respond(http.StatusOK, tc.body) },
+				WithCache(cacheDir, 12))
+			if _, err := seed.client.Lookup(3, "rom.nes", testHashes); err != nil {
+				t.Fatal(err)
+			}
+			h := newHarness(t, func(int) *http.Response { return respond(http.StatusOK, tc.body) },
+				WithCache(cacheDir, 12), WithCutoff(tripped()))
+			h.clock.now = seed.clock.now.Add(time.Hour)
+			res, err := h.client.Lookup(3, "rom.nes", testHashes)
+			if err != nil || res.Outcome != tc.outcome || !res.Cached {
+				t.Fatalf("want cached %v, got %+v, %v", tc.outcome, res, err)
+			}
+			if h.calls != 0 {
+				t.Errorf("want no requests, got %d", h.calls)
 			}
 		})
+	}
+}
+
+func TestExpiredNotFoundDefersTheLookupThatTripsTheCutoff(t *testing.T) {
+	cacheDir := t.TempDir()
+	seed := newHarness(t, func(int) *http.Response { return respond(http.StatusOK, notFoundBody) }, WithCache(cacheDir, 12))
+	if _, err := seed.client.Lookup(3, "rom.nes", testHashes); err != nil {
+		t.Fatal(err)
+	}
+	h := newHarness(t, func(int) *http.Response { return respond(430, "quota") }, WithCache(cacheDir, 12), WithCutoff(cutoff.New()))
+	h.clock.now = seed.clock.now.Add(13 * time.Hour)
+
+	res, err := h.client.Lookup(3, "rom.nes", testHashes)
+	var ce *cutoff.Error
+	if !errors.As(err, &ce) {
+		t.Fatalf("want *cutoff.Error, got %+v, %v", res, err)
 	}
 }
 

@@ -218,7 +218,7 @@ All caches live under `--cache-dir`, or `output.cache_dir` from the config file 
 | What | Where | Expires |
 |---|---|---|
 | Platform catalog (ScreenScraper's systems list as fetched) | `platforms.json` | after `--cache-hours` (12); a file from an older Scrapegoat version is fetched again once. If fetching a fresh list fails, an expired file is used with a one-line warning naming the error |
-| Game lookups, including "not found" | `games/` | after `--cache-hours` (12); after a cutoff, expired entries are still used |
+| Game lookups, including "not found" | `games/` | after `--cache-hours` (12); after a cutoff, expired matches are still used, and an expired "not found" or non-game defers the ROM |
 | Media files | `cache/<platform>/<media-type>/` | never |
 | Composed artwork | `artwork-cache/` | never; rebuilt when an output's settings or the media its layers use change |
 
@@ -259,7 +259,7 @@ When two platforms produce the same slug, the one with the lower ID gets it. A f
 Some statuses mean ScreenScraper will refuse every further request today: bad developer credentials (403), API closed (423), software name blacklisted (426), daily quota exceeded (430) and failed-request quota exceeded (431). The first of these, from a lookup or a media download, is the run's **cutoff**. From then on the run sends no more requests:
 
 - It prints one line naming the cause, e.g. `ScreenScraper daily quota exceeded (430): remaining ROMs deferred`.
-- Every remaining ROM is still hashed and looked up in the game cache. After a cutoff a cache entry counts however old it is, past `--cache-hours` included, so a ROM looked up by any earlier run still gets its usual result.
+- Every remaining ROM is still hashed and looked up in the game cache. After a cutoff a cached match counts however old it is, past `--cache-hours` included. A cached "not found" or non-game counts only while it is within `--cache-hours`; an older one defers the ROM instead, so a ROM that ScreenScraper may have added since is never offered for deletion.
 - A ROM with no cache entry is **deferred**: it is not counted as failed, is never listed as unmatched, and is never deleted or offered for deletion, whatever `--auto-delete` says. The next run looks it up again.
 - Media is no longer fetched. Files already in the media cache are still copied into place, and a matched ROM still gets its `gamelist.xml` entry; the next run fetches the missing media.
 - `gamelist.xml` is still written (except in a dry run). A deferred ROM's entry from the existing `gamelist.xml` is kept unchanged, matched by `<path>`.

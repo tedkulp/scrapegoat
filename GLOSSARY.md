@@ -37,7 +37,7 @@ Asking ScreenScraper (or the local cache of its earlier answers) which game a RO
 _Avoid_: Query, scrape (scrape is the whole per-ROM job, not just this step)
 
 **Lookup outcome**:
-The answer a lookup produces: a match, not found, or non-game. A lookup that could not get an answer at all is a failure, not an outcome. After a cutoff, an answer cached by an earlier run still counts, however old.
+The answer a lookup produces: a match, not found, or non-game. A lookup that could not get an answer at all is a failure, not an outcome. After a cutoff, an answer cached by an earlier run still counts: a match however old, a not found or non-game only while it is within the cache lifetime. An expired not found or non-game makes the ROM a deferred ROM, so a ROM ScreenScraper may have added since is never deleted.
 _Avoid_: Result status, response
 
 **Match**:

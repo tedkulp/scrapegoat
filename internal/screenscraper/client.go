@@ -189,8 +189,9 @@ func outcomeFor(game *Game) Outcome {
 // game a ROM is. Not found and non-game are outcomes, not errors; an error
 // means no answer could be obtained.
 //
-// After a cutoff, any cache entry answers, however old, and a ROM with no
-// entry gets a *cutoff.Error without a request being sent.
+// After a cutoff, a fresh cache entry or an expired match answers. A ROM with
+// no such entry gets a *cutoff.Error without a request being sent, so it is
+// deferred rather than treated as unmatched.
 func (c *Client) Lookup(systemID int, romName string, hashes *ROMHashes) (LookupResult, error) {
 	tripped := c.cutoff.Tripped()
 	if result, ok := c.cachedLookup(hashes, tripped); ok {
@@ -249,17 +250,20 @@ func (c *Client) Lookup(systemID int, romName string, hashes *ROMHashes) (Lookup
 	return result, nil
 }
 
-// cachedLookup answers a lookup from the game cache. anyAge accepts expired
-// entries.
+// cachedLookup answers a lookup from the game cache. anyAge also accepts
+// expired match entries, but never expired not-found or non-game entries:
+// ScreenScraper may know the ROM by now, and answering would make it an
+// unmatched ROM that the run can delete.
 func (c *Client) cachedLookup(hashes *ROMHashes, anyAge bool) (LookupResult, bool) {
 	if c.cache == nil || hashes == nil {
 		return LookupResult{}, false
 	}
-	var cached CacheResult
-	if anyAge {
+	cached := c.cache.Get(hashes)
+	if !cached.Found && anyAge {
 		cached = c.cache.GetAny(hashes)
-	} else {
-		cached = c.cache.Get(hashes)
+		if cached.NotFound || cached.IsNonGame {
+			return LookupResult{}, false
+		}
 	}
 	if !cached.Found {
 		return LookupResult{}, false

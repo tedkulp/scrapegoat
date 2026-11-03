@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `scrape` skips media files that already exist in the destination, and `--dry-run` reports how many would be downloaded and how many already exist. `--force-redownload` downloads them all again.
 - `user-info` shows the per-minute request limit and the failed-request quota (`Failed Requests Today: used / max`).
 - An MIT `LICENSE` file.
-- When ScreenScraper cuts a run off (bad developer credentials 403, API closed 423, software blacklisted 426, daily quota 430 or failed-request quota 431, from a lookup or a media download), `scrape` stops sending requests and prints one line naming the cause. Remaining ROMs are answered from the game cache, expired entries included; ROMs with no entry are deferred to the next run. Media already in the media cache is still placed.
+- When ScreenScraper cuts a run off (bad developer credentials 403, API closed 423, software blacklisted 426, daily quota 430 or failed-request quota 431, from a lookup or a media download), `scrape` stops sending requests and prints one line naming the cause. Remaining ROMs are answered from the game cache: fresh entries and expired matches. ROMs with no entry, or only an expired "not found" or non-game entry, are deferred to the next run and never deleted. Media already in the media cache is still placed.
 
 ### Changed
 
