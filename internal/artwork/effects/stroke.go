@@ -5,6 +5,8 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
+
+	"github.com/tedkulp/scrapegoat/internal/artwork"
 )
 
 // StrokeEffect adds a border around an image
@@ -28,16 +30,16 @@ func (e *StrokeEffect) Validate(params map[string]interface{}) error {
 
 // Apply adds a border to an image
 func (e *StrokeEffect) Apply(img image.Image, params map[string]interface{}) (image.Image, error) {
-	width := getIntParam(params, "width", 1)
-	colorStr := getStringParam(params, "color", "#FFFFFF")
-	opacity := getIntParam(params, "opacity", 100)
+	width := artwork.IntParam(params, "width", 1)
+	colorStr := artwork.StringParam(params, "color", "#FFFFFF")
+	opacity := artwork.IntParam(params, "opacity", 100)
 
 	if width <= 0 {
 		return img, nil
 	}
 
 	// Parse color
-	c, err := parseColor(colorStr)
+	c, err := artwork.ParseColor(colorStr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid stroke color: %v", err)
 	}
@@ -74,86 +76,4 @@ func (e *StrokeEffect) Apply(img image.Image, params map[string]interface{}) (im
 	draw.Draw(dst, image.Rect(width, width, width+oldWidth, width+oldHeight), img, bounds.Min, draw.Over)
 
 	return dst, nil
-}
-
-func getStringParam(params map[string]interface{}, key string, defaultValue string) string {
-	if val, ok := params[key]; ok {
-		if s, ok := val.(string); ok {
-			return s
-		}
-	}
-	return defaultValue
-}
-
-func parseColor(hex string) (color.Color, error) {
-	if hex == "" || hex == "transparent" {
-		return color.Transparent, nil
-	}
-
-	// Remove # prefix if present
-	if hex[0] == '#' {
-		hex = hex[1:]
-	}
-
-	// Parse RGB or RGBA
-	var r, g, b, a uint8
-	a = 255 // Default to opaque
-
-	switch len(hex) {
-	case 6: // RGB
-		_, err := parseHexByte(hex[0:2], &r)
-		if err != nil {
-			return nil, err
-		}
-		_, err = parseHexByte(hex[2:4], &g)
-		if err != nil {
-			return nil, err
-		}
-		_, err = parseHexByte(hex[4:6], &b)
-		if err != nil {
-			return nil, err
-		}
-	case 8: // RGBA
-		_, err := parseHexByte(hex[0:2], &r)
-		if err != nil {
-			return nil, err
-		}
-		_, err = parseHexByte(hex[2:4], &g)
-		if err != nil {
-			return nil, err
-		}
-		_, err = parseHexByte(hex[4:6], &b)
-		if err != nil {
-			return nil, err
-		}
-		_, err = parseHexByte(hex[6:8], &a)
-		if err != nil {
-			return nil, err
-		}
-	default:
-		return nil, image.ErrFormat
-	}
-
-	return color.NRGBA{R: r, G: g, B: b, A: a}, nil
-}
-
-func parseHexByte(s string, out *uint8) (int, error) {
-	var v uint8
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		var d uint8
-		switch {
-		case '0' <= c && c <= '9':
-			d = c - '0'
-		case 'a' <= c && c <= 'f':
-			d = c - 'a' + 10
-		case 'A' <= c && c <= 'F':
-			d = c - 'A' + 10
-		default:
-			return 0, image.ErrFormat
-		}
-		v = v*16 + d
-	}
-	*out = v
-	return 2, nil
 }

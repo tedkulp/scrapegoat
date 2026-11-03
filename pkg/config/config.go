@@ -113,6 +113,9 @@ func Load(configPath string) (*Config, error) {
 	if config.ScreenScraper.UserPassword == "" {
 		return nil, fmt.Errorf("screenscraper.user_password is required")
 	}
+	if err := config.Artwork.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid artwork configuration: %w", err)
+	}
 
 	return &config, nil
 }

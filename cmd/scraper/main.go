@@ -412,28 +412,15 @@ func runScraper(cmd *cobra.Command, args []string) {
 		// Generate artwork if enabled
 		if compositor != nil && len(downloadedFiles) > 0 {
 			logVerbose("  Generating artwork...")
-			artworkDir := filepath.Join(mediaRootDir, cfg.Artwork.OutputDir)
-
-			// Convert downloadedFiles to artwork.MediaFiles format (just type name without directory)
-			artworkMediaFiles := make(artwork.MediaFiles)
-			for mediaType, fullPath := range downloadedFiles {
-				artworkMediaFiles[mediaType] = fullPath
+			artworkResult := compositor.GenerateArtwork(romName, artwork.MediaFiles(downloadedFiles), mediaRootDir)
+			for _, err := range artworkResult.Errors {
+				logInfo("  Warning: %v", err)
 			}
-
-			artworkFiles, err := compositor.GenerateArtwork(romName, artworkMediaFiles, artworkDir)
-			if err != nil {
-				logVerbose("  Warning: Failed to generate artwork: %v", err)
-			} else {
-				logVerbose("  Generated %d artwork files", len(artworkFiles))
-				// Add artwork files to downloadedFiles so they're included in gamelist.xml
-				for artType, artPath := range artworkFiles {
-					downloadedFiles[artType] = artPath
-				}
-			}
+			logVerbose("  Generated %d artwork files", len(artworkResult.Paths))
 		}
 
 		// Add game to metadata
-		if err := gen.AddGameFromScraper(rom.Path, game, downloadedFiles); err != nil {
+		if err := gen.AddGameFromScraper(rom.Path, game); err != nil {
 			logError("  Failed to add game metadata: %v", err)
 			unmatchedCount++
 			unmatchedROMs = append(unmatchedROMs, rom)

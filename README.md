@@ -201,6 +201,8 @@ Each media file is named after its ROM without the extension. A type is skipped 
 
 Media files that already exist in the destination are not downloaded again unless you pass `--force-redownload`.
 
+With artwork enabled, each artwork output writes `<media-root-dir>/<output_dir>/<rom-name>.<format>`; see [ARTWORK.md](ARTWORK.md).
+
 ## Caching
 
 All caches live under `--cache-dir`, or `output.cache_dir` from the config file when the flag is not given (default `~/.scrapegoat`). `{platform}` is expanded in both, so `cache_dir: ~/.scrapegoat/{platform}` gives each platform its own cache:
@@ -210,6 +212,7 @@ All caches live under `--cache-dir`, or `output.cache_dir` from the config file 
 | Platform list | `platforms.json` | after `--cache-hours` (12) |
 | Game lookups, including "not found" | `games/` | after `--cache-hours` (12) |
 | Media files | `<platform>/<media-type>/` | never |
+| Composed artwork | `artwork-cache/` | never; rebuilt when an output's settings or the media its layers use change |
 
 Cache hits make no API request and do not count against your quota. Delete the directory to start fresh: `rm -rf ~/.scrapegoat/`.
 
