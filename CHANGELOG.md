@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-03
+
 ### Added
 
 - `scrape` skips media files that already exist in the destination, and `--dry-run` reports how many would be downloaded and how many already exist. `--force-redownload` downloads them all again.
@@ -15,9 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - When ScreenScraper cuts a run off (bad developer credentials 403, API closed 423, software blacklisted 426, daily quota 430 or failed-request quota 431, from a lookup or a media download), `scrape` stops sending requests and prints one line naming the cause. Remaining ROMs are answered from the game cache: fresh entries and expired matches. ROMs with no entry, or only an expired "not found" or non-game entry, are deferred to the next run and never deleted. Media already in the media cache is still placed.
 
 ### Changed
+
 - `--platform apple2gs` now picks Apple IIGS (217) instead of Apple II (86), whose names also include Apple IIGS. Apple IIGS had no slug of its own before.
 - The media cache is keyed by ScreenScraper system ID (`cache/<system-id>/`) instead of the `--platform` slug as typed, so slugs for the same platform (`nes`, `famicom`, `NES`) share one cache. The first scrape with a given `--platform` moves that slug's old `cache/<slug>/` folder into place, so nothing is downloaded again.
-
 - Only failures that can clear up on their own are retried: network errors, timeouts, an overloaded server (401, an HTML response), 429 and 5xx. Every other error stops after one request and names the cause, such as `ScreenScraper rejected developer credentials (403)` or `ScreenScraper daily quota exceeded (430)`.
 - A ROM ScreenScraper answers with 404 counts as not found and is cached like any other not-found result, so re-runs don't look it up again until `--cache-hours` passes.
 - The 1-second wait applies between HTTP requests to ScreenScraper, not after every ROM, so ROMs answered from the cache no longer wait.
@@ -33,10 +35,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `list-platforms` reads the cached `platforms.json` instead of calling the API every time, and also lists `config.yaml` platforms, marked `(config)`.
 - `config.yaml` platform slugs are matched without regard to case, like ScreenScraper's.
 - The scrape log names the platform by its first name, e.g. `Platform: Atari ST (ID: 42)`, instead of the full comma-separated list.
-- `platforms.json` now stores ScreenScraper's systems list as fetched. A file from an older version is fetched again once.
+- `platforms.json` now stores ScreenScraper's systems list as fetched. A file from an older version is fetched again once. If fetching a fresh list fails, an expired `platforms.json` is used with a one-line warning instead of stopping the run.
+- A failing artwork output is reported without `--verbose`.
 
 ### Fixed
 
+- `--cache-dir` now also holds `platforms.json`, which was always read from and written to `output.cache_dir` (default `~/.scrapegoat`).
+- `list-platforms` no longer creates a folder literally named `{platform}` when `output.cache_dir` contains `{platform}`; it uses the folder above it.
 - A used-up quota (or another cutoff) no longer turns every remaining ROM into an unmatched ROM: with `--auto-delete=true` the run used to delete ROMs that were never looked up. Deferred ROMs are never deleted or offered for deletion.
 - After a cutoff, `gamelist.xml` keeps the existing entries of deferred ROMs instead of dropping them.
 - Game lookups retry up to 3 times again, with 2 s and 4 s backoff, instead of failing on the first error.
@@ -69,5 +74,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `user-info` for account details and API quota, and `version`.
 - Release builds for Linux, macOS and Windows on x86_64 and arm64.
 
-[Unreleased]: https://github.com/tedkulp/scrapegoat/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/tedkulp/scrapegoat/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/tedkulp/scrapegoat/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/tedkulp/scrapegoat/releases/tag/v1.0.0
