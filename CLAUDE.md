@@ -36,14 +36,15 @@ The application uses `config.yaml` for configuration, looked up as `./config.yam
 - `screenscraper.dev_id` and `screenscraper.dev_password` - Developer credentials
 - `screenscraper.user_id` and `screenscraper.user_password` - User credentials
 
-**Platform Auto-Discovery**: Platforms are automatically fetched from the ScreenScraper.fr API and cached locally in `<cache-dir>/platforms.json` (default `~/.scrapegoat`). The cache expires after `--cache-hours` (default 12). You can optionally define platforms manually in `config.yaml` to override API data or work offline.
+**Platform Auto-Discovery**: Platforms are automatically fetched from the ScreenScraper.fr API and cached locally in `<cache-dir>/platforms.json` (default `~/.scrapegoat`). The cache expires after `--cache-hours` (default 12; `list-platforms` always uses 12 and the config's `cache_dir`). You can optionally define platforms manually in `config.yaml` to override API data or work offline.
 
 ## Architecture
 
 ### Package Structure
 
 - `cmd/scraper/main.go` - CLI entry point using Cobra. Orchestrates the scraping workflow.
-- `pkg/config/` - Configuration loading via Viper. Handles YAML config parsing and validation.
+- `pkg/config/` - Configuration loading via Viper. Handles YAML config parsing and validation. Plain settings only (including the yaml `platforms:` block); it does not import `internal/scraper`.
+- `internal/platform/` - The platform catalog: fetching and caching the systems list, slug and alias rules, lookup and the `list-platforms` listing.
 - `internal/scanner/` - ROM file discovery. Walks directories to find files with configured extensions.
 - `internal/scraper/` - ScreenScraper API client, game cache and ROM hashing.
 - `internal/media/` - Media placement: picks one file per media type, plans where each comes from (media root, media cache or ScreenScraper), and fetches and writes them with a worker pool.
@@ -76,7 +77,7 @@ The main scraping workflow follows these steps:
 
 **gamelist.xml Paths** (`Generator.AddGameFromScraper` in `internal/metadata/gamelist.go`): Each entry's `<path>` is the ROM filename with a "./" prefix, as EmulationStation expects. Media tags are omitted: EmulationStation finds media by directory and ROM filename.
 
-**Platform Caching** (`Config.GetPlatform` in `pkg/config/config.go`): Platform definitions are fetched from the ScreenScraper API via `systemesListe.php` and cached locally. The cache expires after `--cache-hours` (default 12). When a platform is requested, the system first checks `config.yaml`, then the cache, and finally fetches from the API if needed. Cache lookups by slug are case-insensitive. This allows the application to work with any platform supported by ScreenScraper without manual configuration.
+**Platform Caching** (`platform.Catalog` in `internal/platform/`): `platform.New(platform.Options{Source, Configured, CacheDir, Expiry, Clock})` builds the catalog; `main.go` passes a real `scraper.Client` as the `Source` (anything with `GetSystemsList()`), the yaml platforms, and the cache dir and hours from `scrapeSettings`. `Lookup(slug)` checks `config.yaml` platforms first (no fetch), then loads `<cache-dir>/platforms.json`, which stores the raw systems list (ID, regional names, extensions) plus `fetched_at` and a `format` number; a missing, expired or old-format (pre-catalog slug map) file is refetched via `systemesListe.php` and rewritten. Slugs are worked out at load, one set of rules for lookup and listing: one slug per comma-separated name part (lowercased, URL-safe via `gosimple/slug`, dashes removed); collisions go to the lowest platform ID; aliases (hard-coded in `internal/platform/aliases.go`, keyed by platform ID) beat name slugs; yaml platforms beat everything. All lookups are case-insensitive. A `Platform` has `ID`, `Name` (first name part, e.g. `Atari ST`), `Names` and `Extensions`. `List()` gives each platform its alias, else its shortest slug it actually won (ties alphabetical), so every listed slug resolves to its row.
 
 **Caches** (all under `--cache-dir`, default `~/.scrapegoat`): `platforms.json` and `games/` (game lookups, including not-found results) expire after `--cache-hours`; media in `cache/<platform>/<media-type>/` (with a `.json` media identity sidecar per file) never expires.
 

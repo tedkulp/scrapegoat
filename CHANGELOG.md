@@ -24,6 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--auto-delete` and `--artwork` accept `1`/`0` (any `strconv.ParseBool` value) as well as `true`/`false`. An unrecognised value, or `--cache-hours` of 0 or less, now stops the run with an error naming the flag instead of being silently ignored.
 - `{platform}` is expanded in `output.cache_dir` from the config file, not only in flag paths.
 - The end-of-run list and summary say "Unmatched" instead of "Failed": `=== Unmatched ROMs ===` and `Unmatched: N`.
+- Platform slugs follow one set of rules for `--platform` and `list-platforms`: one slug per platform name, the lower platform ID wins a shared slug, aliases beat name slugs, and `config.yaml` platforms beat both. Every slug `list-platforms` shows picks that row's platform. The long joined-up slugs made from all of a platform's names (such as `atari2600a26002600`) are gone.
+- `list-platforms` reads the cached `platforms.json` instead of calling the API every time, and also lists `config.yaml` platforms, marked `(config)`.
+- `config.yaml` platform slugs are matched without regard to case, like ScreenScraper's.
+- The scrape log names the platform by its first name, e.g. `Platform: Atari ST (ID: 42)`, instead of the full comma-separated list.
+- `platforms.json` now stores ScreenScraper's systems list as fetched. A file from an older version is fetched again once.
 
 ### Fixed
 

@@ -139,15 +139,17 @@ scrapegoat scrape --platform n64 --rom-dir ~/roms/n64 \
 scrapegoat list-platforms
 ```
 
-Prints every ScreenScraper platform with its ID, slug, name and file extensions. Results are cached for 12 hours.
+Prints every platform with its ID, slug, name and file extensions: platforms defined in `config.yaml` first, marked `(config)`, then ScreenScraper's by ID. The listed slug always picks that row's platform with `--platform`. ScreenScraper's list is read from `platforms.json` in `output.cache_dir` (default `~/.scrapegoat`) and fetched again only when that file is older than 12 hours.
 
 ```
 ID    Slug                      Platform Name                  Extensions
 ----- ------------------------- ------------------------------ ----------
-7     nes                       Nintendo NES                   .nes, .unf, .unif
-4     snes                      Nintendo SNES                  .smc, .sfc, .swc
+3     nes                       Nintendo Entertainment System  .nes, .fds, .fig, .bin, .unf
+4     snes                      Super Nintendo Entertainment System .sfc, .smc, .fig, .mgd, .swc
 11    virtualboy                Nintendo virtualboy            .vb, .vboy, .bin
 ```
+
+A platform shows `-` as its slug when every slug its names produce already picks another platform.
 
 ### Check account and quota
 
@@ -211,7 +213,7 @@ All caches live under `--cache-dir`, or `output.cache_dir` from the config file 
 
 | What | Where | Expires |
 |---|---|---|
-| Platform list | `platforms.json` | after `--cache-hours` (12) |
+| Platform list (ScreenScraper's systems list as fetched) | `platforms.json` | after `--cache-hours` (12); a file from an older Scrapegoat version is fetched again once |
 | Game lookups, including "not found" | `games/` | after `--cache-hours` (12) |
 | Media files | `cache/<platform>/<media-type>/` | never |
 | Composed artwork | `artwork-cache/` | never; rebuilt when an output's settings or the media its layers use change |
@@ -233,7 +235,13 @@ platforms:
       - ".chd"
 ```
 
-Entries in `config.yaml` take priority over the cache and the API.
+Entries in `config.yaml` take priority over ScreenScraper platforms with the same slug, and picking one makes no API request. Their slug is the key under `platforms:`.
+
+### Platform slugs
+
+`--platform` takes a platform slug, matched without regard to case. ScreenScraper gives most platforms several comma-separated names (`Atari ST,Atari STE,520 ST,...`), and each name gives one slug: lowercased, accents and symbols transliterated, spaces and dashes removed (`atarist`, `atariste`, `520st`). Logs show the first name, e.g. `Platform: Atari ST (ID: 42)`.
+
+When two platforms produce the same slug, the one with the lower ID gets it. A few platforms have an alias, a slug Scrapegoat adds because none of their names produce the expected one (`atari2600`, `atari5200`, `tg16`, `ngp`, `gameandwatch`, `n64dd`, `virtualboy`, `prboom`); an alias beats any name slug, and a `config.yaml` platform beats both. A platform that does not exist stops the run with an error naming the slug.
 
 ## API limits
 
