@@ -101,7 +101,7 @@ scrapegoat scrape --platform <platform> --rom-dir <path>
 | `--cache-dir` | `~/.scrapegoat` | Cache for the platform catalog, game lookups and media |
 | `-w, --workers` | `4` | Concurrent media download workers |
 | `--cache-hours` | `12` | Hours before cached platforms and game lookups expire |
-| `--force-redownload` | off | Re-download media files that already exist in the destination |
+| `--force-redownload` | off | Fetch every media file from ScreenScraper again, skipping both the media root and the media cache. Counts against the daily quota. |
 | `--artwork` | from config | `true` or `false` to override `artwork.enabled` |
 | `--auto-delete` | prompt | `true` deletes unmatched ROMs without asking, `false` keeps them |
 | `--dry-run` | off | Query the API but download and write nothing |
@@ -197,7 +197,9 @@ Each media file is named after its ROM without the extension. A type is skipped 
 
 `gamelist.xml` holds names, descriptions, ratings, release dates, developers, publishers, genres and player counts. It has no media tags: EmulationStation finds media by directory and filename.
 
-Media files that already exist in the destination are not downloaded again unless you pass `--force-redownload`.
+Media files that already exist in the media root are kept, and files in the media cache are copied from there without an API request. `--force-redownload` skips both and fetches every media file from ScreenScraper again, overwriting the cached and placed copies; those downloads count against your daily quota. `--dry-run` reports how many files would be downloaded, copied from the cache or kept, and applies `--force-redownload` the same way.
+
+A media file that fails to download is reported and counted in the `Media:` line as failed; the ROM itself still counts as scraped.
 
 With artwork enabled, each artwork output writes `<media-root-dir>/<output_dir>/<rom-name>.<format>`; see [ARTWORK.md](ARTWORK.md).
 
@@ -209,10 +211,10 @@ All caches live under `--cache-dir` (default `~/.scrapegoat`):
 |---|---|---|
 | Platform list | `platforms.json` | after `--cache-hours` (12) |
 | Game lookups, including "not found" | `games/` | after `--cache-hours` (12) |
-| Media files | `<platform>/<media-type>/` | never |
+| Media files | `cache/<platform>/<media-type>/` | never |
 | Composed artwork | `artwork-cache/` | never; rebuilt when an output's settings or the media its layers use change |
 
-Cache hits make no API request and do not count against your quota. Delete the directory to start fresh: `rm -rf ~/.scrapegoat/`.
+Cache hits make no API request and do not count against your quota. Each cached media file has a `.json` sidecar beside it recording which ScreenScraper media it is (system, game and media name, never credentials). When a lookup selects different media for a ROM, such as another region, the cached file is downloaded again. A cached file without a sidecar is trusted and given one. Delete the directory to start fresh: `rm -rf ~/.scrapegoat/`.
 
 ## Platforms
 

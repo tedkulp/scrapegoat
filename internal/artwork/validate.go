@@ -5,22 +5,13 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/tedkulp/scrapegoat/internal/media"
 )
 
-// MediaTypes are the media type folder names a layer resource can use. They
-// are the EmulationStation media folders downloaded media is placed in, and
-// must match the media type mapping used when choosing media for a ROM.
-var MediaTypes = []string{
-	"3dboxes",
-	"box2dfront",
-	"backcovers",
-	"manuals",
-	"screenshots",
-	"titlescreens",
-	"wheel",
-	"videos",
-	"physicalmedia",
-}
+// MediaTypes are the media type folder names a layer resource can use: the
+// EmulationStation media folders internal/media places media in.
+var MediaTypes = media.Types()
 
 // CustomResourcePrefix marks a layer resource as a file in resources_dir.
 const CustomResourcePrefix = "custom:"

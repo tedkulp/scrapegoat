@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A ROM ScreenScraper answers with 404 counts as not found and is cached like any other not-found result, so re-runs don't look it up again until `--cache-hours` passes.
 - The 1-second wait applies between HTTP requests to ScreenScraper, not after every ROM, so ROMs answered from the cache no longer wait.
 - The remaining-quota count shown during `scrape` also updates from the platform list request.
+- `--force-redownload` also skips the media cache, so every media file is fetched from ScreenScraper again (and counts against the daily quota). `--dry-run` applies it too, and reports how many files would come from the media cache.
+- A failed media download is always reported, and the `Media:` line counts it as failed. It does not fail the ROM.
 
 ### Fixed
 
@@ -26,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A ROM cached as not found no longer crashes `scrape`; it is listed with the other unmatched ROMs.
 - `user-info` no longer prints blank per-hour, per-minute and per-second limits.
 - The `--verbose` cache summary shows the actual `--cache-hours` value instead of always saying 12 hours.
+- A cached media file is downloaded again when a lookup now selects a different region or game for it. Each cached file gets a small `.json` sidecar recording which media it is; existing cached files without one are kept and adopted.
+- An interrupted media download no longer leaves a partial file that later runs serve from the cache. An empty cached file is downloaded again.
 - Artwork is always written to `<media-root>/<dir>/<rom-name>.<format>`, whether it was just composed or came from the artwork cache. `<dir>` is the output's new optional `output_dir`, or `artwork.output_dir`. Older runs may have left `<rom-name>-<type>.<format>` files in the artwork folder; they are not removed and can be deleted by hand.
 - The artwork cache key no longer changes between runs, so unchanged artwork is copied from the cache instead of being composed again. Existing artwork cache entries are rebuilt once.
 - Two artwork outputs writing the same format to the same folder, and layer resources that are not a media type or `custom:<path>`, are rejected when `config.yaml` loads instead of silently overwriting each other or producing no artwork. `config.yaml.example` now uses real media type names.
