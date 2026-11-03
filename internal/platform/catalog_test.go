@@ -214,6 +214,41 @@ func TestLookup_UnknownSlugNamesIt(t *testing.T) {
 	}
 }
 
+func TestLookup_FetchFailureFallsBackToExpiredCache(t *testing.T) {
+	dir := t.TempDir()
+	clock := &fakeClock{t0}
+	mustLookup(t, newCatalog(&fakeSource{systems: []screenscraper.System{system(3, "NES")}}, dir, clock, nil), "nes")
+
+	clock.now = t0.Add(13 * time.Hour)
+	var warnings strings.Builder
+	c := New(Options{
+		Source:   &fakeSource{err: errors.New("boom")},
+		CacheDir: dir,
+		Expiry:   12 * time.Hour,
+		Clock:    clock,
+		Warnings: &warnings,
+	})
+	if p := mustLookup(t, c, "nes"); p.ID != 3 {
+		t.Fatalf("got %+v, want the expired cache's platform", p)
+	}
+	if w := warnings.String(); strings.Count(w, "\n") != 1 || !strings.Contains(w, "boom") {
+		t.Fatalf("warnings = %q, want one line naming the fetch error", w)
+	}
+}
+
+func TestLookup_FetchFailureWithOldFormatCacheFails(t *testing.T) {
+	dir := t.TempDir()
+	old := `{"fetched_at": "` + t0.Format(time.RFC3339) + `",
+	  "platforms": {"nes": {"ID": 99, "Name": "Old NES", "Extensions": [".nes"]}}}`
+	if err := os.WriteFile(filepath.Join(dir, cacheFileName), []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := newCatalog(&fakeSource{err: errors.New("boom")}, dir, &fakeClock{t0}, nil)
+	if _, err := c.Lookup("nes"); err == nil || !strings.Contains(err.Error(), "boom") {
+		t.Fatalf("err = %v, want the fetch error", err)
+	}
+}
+
 func TestLookup_FetchFailureIsReported(t *testing.T) {
 	c := newCatalog(&fakeSource{err: errors.New("boom")}, t.TempDir(), &fakeClock{t0}, nil)
 	_, err := c.Lookup("nes")

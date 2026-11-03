@@ -36,43 +36,49 @@ func (c *Catalog) cachePath() string {
 }
 
 // systems returns the systems list from a fresh platforms.json, or fetches
-// it and rewrites that file.
+// it and rewrites that file. When the fetch fails, an expired platforms.json
+// in the current format is used instead, with a warning.
 func (c *Catalog) systems() ([]screenscraper.System, error) {
-	if systems, ok := c.readCache(); ok {
-		return systems, nil
+	cached, fetchedAt, ok := c.readCache()
+	if ok && c.opts.Clock.Now().Sub(fetchedAt) <= c.opts.Expiry {
+		return cached, nil
 	}
 	if c.opts.Source == nil {
 		return nil, fmt.Errorf("no ScreenScraper source")
 	}
 	systems, err := c.opts.Source.GetSystemsList()
 	if err != nil {
+		if ok {
+			fmt.Fprintf(c.opts.Warnings, "Warning: failed to fetch systems list from API (%v); using expired platforms cache from %s\n",
+				err, fetchedAt.Local().Format(time.DateTime))
+			return cached, nil
+		}
 		return nil, fmt.Errorf("failed to fetch systems list from API: %w", err)
 	}
 	if err := c.writeCache(systems); err != nil {
 		// The data is in hand; a cache that can't be written only costs a
 		// fetch next run.
-		fmt.Fprintf(os.Stderr, "Warning: failed to save platforms cache: %v\n", err)
+		fmt.Fprintf(c.opts.Warnings, "Warning: failed to save platforms cache: %v\n", err)
 	}
 	return systems, nil
 }
 
-func (c *Catalog) readCache() ([]screenscraper.System, bool) {
+// readCache reads platforms.json whatever its age. ok is false when the file
+// is missing, unreadable or in an old format.
+func (c *Catalog) readCache() (systems []screenscraper.System, fetchedAt time.Time, ok bool) {
 	data, err := os.ReadFile(c.cachePath())
 	if err != nil {
-		return nil, false
+		return nil, time.Time{}, false
 	}
 	var f cacheFile
 	if err := json.Unmarshal(data, &f); err != nil || f.Format != cacheFormat {
-		return nil, false
+		return nil, time.Time{}, false
 	}
-	if c.opts.Clock.Now().Sub(f.FetchedAt) > c.opts.Expiry {
-		return nil, false
-	}
-	systems := make([]screenscraper.System, len(f.Systems))
+	systems = make([]screenscraper.System, len(f.Systems))
 	for i, s := range f.Systems {
 		systems[i] = screenscraper.System{ID: s.ID, Names: s.Names, Extensions: s.Extensions}
 	}
-	return systems, true
+	return systems, f.FetchedAt, true
 }
 
 func (c *Catalog) writeCache(systems []screenscraper.System) error {

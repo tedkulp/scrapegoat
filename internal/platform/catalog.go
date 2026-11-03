@@ -7,6 +7,8 @@ package platform
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -54,6 +56,9 @@ type Options struct {
 	Expiry time.Duration
 	// Clock defaults to the system clock.
 	Clock Clock
+	// Warnings receives one-line warnings, such as falling back to an
+	// expired platforms.json. Defaults to os.Stderr.
+	Warnings io.Writer
 }
 
 // Entry is one row of the listing.
@@ -83,6 +88,9 @@ type Catalog struct {
 func New(opts Options) *Catalog {
 	if opts.Clock == nil {
 		opts.Clock = systemClock{}
+	}
+	if opts.Warnings == nil {
+		opts.Warnings = os.Stderr
 	}
 	configured := make(map[string]Platform, len(opts.Configured))
 	for s, p := range opts.Configured {
