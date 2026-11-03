@@ -14,6 +14,7 @@ import (
 	"github.com/tedkulp/scrapegoat/internal/media"
 	"github.com/tedkulp/scrapegoat/internal/metadata"
 	"github.com/tedkulp/scrapegoat/internal/scanner"
+	"github.com/tedkulp/scrapegoat/internal/scrape"
 	"github.com/tedkulp/scrapegoat/internal/scraper"
 	"github.com/tedkulp/scrapegoat/pkg/config"
 )
@@ -256,7 +257,6 @@ func runScraper(cmd *cobra.Command, args []string) {
 		mediaOpts = append(mediaOpts, media.WithDebugOutput(os.Stderr))
 	}
 	placer := media.New(cacheDir, platformName, mediaRootDir, settings.Workers, mediaOpts...)
-	mediaMode := media.Mode{DryRun: dryRun, Force: settings.ForceRedownload}
 
 	// Step 3.5: Initialize artwork compositor if enabled
 	var compositor *artwork.Compositor
@@ -270,106 +270,25 @@ func runScraper(cmd *cobra.Command, args []string) {
 	// Note: mediaRootDir is used directly, no longer needs cfg.Output.MediaDir subdirectory
 	gen := metadata.NewGenerator(gamelistDir, mediaRootDir)
 
-	// Step 5: Process each ROM
+	// Step 5: Scrape each ROM
+	scrapeJob := scrape.New(scraperClient, placer, compositor, platform.ID,
+		media.Mode{DryRun: dryRun, Force: settings.ForceRedownload})
+
 	logInfo("\nProcessing ROM files...")
-	successCount := 0
-	unmatchedCount := 0
-	var unmatchedROMs []scanner.ROMFile // not found, non-game, or failed
+	var tally runTally
 
 	for i, rom := range roms {
 		logInfo("\n[%d/%d] Processing: %s", i+1, len(roms), rom.Filename)
 
-		// Hash the ROM file
-		logVerbose("  Computing hashes...")
-		hashes, err := scraper.HashROMFile(rom.Path)
-		if err != nil {
-			logError("  Failed to hash ROM: %v", err)
-			unmatchedCount++
-			unmatchedROMs = append(unmatchedROMs, rom)
-			continue
-		}
-		logVerbose("  CRC32: %s, MD5: %s", hashes.CRC32, hashes.MD5)
+		res, err := scrapeJob.Scrape(rom)
+		printReport(scrapeReport(res, err))
+		tally.record(rom, res, err)
 
-		// Query ScreenScraper API (or get from cache)
-		logVerbose("  Querying ScreenScraper API...")
-		result, err := scraperClient.Lookup(platform.ID, rom.Filename, hashes)
-		if err != nil {
-			logError("  Failed to get game info: %v", err)
-			unmatchedCount++
-			unmatchedROMs = append(unmatchedROMs, rom)
-			continue
-		}
-
-		if result.Outcome == scraper.OutcomeNotFound {
-			if result.Cached {
-				logError("  Failed to get game info: game not found in ScreenScraper database (cached)")
-			} else {
-				logError("  Failed to get game info: game not found in ScreenScraper database")
+		if err == nil && res.Outcome == scrape.OutcomeScraped && !res.DryRun {
+			gen.AddGameFromScraper(rom.Path, res.Game)
+			if quota := scraperClient.Quota(); quota.Known {
+				logInfo("  API Quota: %d requests remaining today", quota.Remaining())
 			}
-			unmatchedCount++
-			unmatchedROMs = append(unmatchedROMs, rom)
-			continue
-		}
-
-		game := result.Game
-		gameName := game.GetPreferredName(scraper.DefaultRegions())
-		if result.Cached {
-			logInfo("  Found: %s (cached)", gameName)
-		} else {
-			logInfo("  Found: %s", gameName)
-		}
-
-		if result.Outcome == scraper.OutcomeNonGame {
-			logInfo("  Skipping: Marked as non-game by ScreenScraper")
-			unmatchedCount++
-			unmatchedROMs = append(unmatchedROMs, rom)
-			continue
-		}
-
-		mediaPlan := placer.Plan(game, rom.Filename, mediaMode)
-
-		if dryRun {
-			logInfo("  [DRY RUN] Would download %d media files (%d from cache, %d already exist)",
-				mediaPlan.Count(media.SourceDownload), mediaPlan.Count(media.SourceCache), mediaPlan.Count(media.SourceExisting))
-			successCount++
-			continue
-		}
-
-		romName := strings.TrimSuffix(rom.Filename, filepath.Ext(rom.Filename))
-
-		logVerbose("  Placing %d media files (%d already exist)...", len(mediaPlan.Items), mediaPlan.Count(media.SourceExisting))
-		mediaResult := placer.Execute(mediaPlan)
-		for _, mediaType := range media.Types() {
-			if err, ok := mediaResult.Failures[mediaType]; ok {
-				logError("    Failed to place %s: %v", mediaType, err)
-			}
-		}
-		if summary := mediaSummary(mediaResult); summary != "" {
-			logInfo("  Media: %s", summary)
-		}
-
-		// Generate artwork if enabled
-		if compositor != nil && len(mediaResult.Placed) > 0 {
-			logVerbose("  Generating artwork...")
-			artworkResult := compositor.GenerateArtwork(romName, artwork.MediaFiles(mediaResult.Placed), mediaRootDir)
-			for _, err := range artworkResult.Errors {
-				logInfo("  Warning: %v", err)
-			}
-			logVerbose("  Generated %d artwork files", len(artworkResult.Paths))
-		}
-
-		// Add game to metadata
-		if err := gen.AddGameFromScraper(rom.Path, game); err != nil {
-			logError("  Failed to add game metadata: %v", err)
-			unmatchedCount++
-			unmatchedROMs = append(unmatchedROMs, rom)
-			continue
-		}
-
-		successCount++
-
-		if quota := scraperClient.Quota(); quota.Known {
-			logInfo("  API Quota: %d requests remaining today", quota.Remaining())
 		}
 	}
 
@@ -385,22 +304,23 @@ func runScraper(cmd *cobra.Command, args []string) {
 	}
 
 	// Apply the unmatched ROM disposition (keep, delete, or ask)
-	if len(unmatchedROMs) > 0 && !dryRun {
-		handleUnmatchedROMs(settings.UnmatchedDisposition, unmatchedROMs)
+	if len(tally.unmatched) > 0 && !dryRun {
+		handleUnmatchedROMs(settings.UnmatchedDisposition, tally.unmatched)
 	}
 
 	// Summary
 	logInfo("\n=== Summary ===")
 	logInfo("Total ROMs processed: %d", len(roms))
-	logInfo("Successful: %d", successCount)
-	logInfo("Unmatched: %d", unmatchedCount)
+	for _, line := range tally.summaryLines() {
+		logInfo("%s", line)
+	}
 
 	// API call statistics
 	if totalAPICalls := scraperClient.RequestCount(); totalAPICalls > 0 && !dryRun {
 		logInfo("\n=== API Call Statistics ===")
 		logInfo("Total API calls: %d", totalAPICalls)
-		if successCount > 0 {
-			avgPerROM := float64(totalAPICalls) / float64(successCount)
+		if tally.scraped > 0 {
+			avgPerROM := float64(totalAPICalls) / float64(tally.scraped)
 			logInfo("Average API calls per ROM: %.2f", avgPerROM)
 		}
 		logInfo("(Run with --verbose to see detailed API call logs)")
