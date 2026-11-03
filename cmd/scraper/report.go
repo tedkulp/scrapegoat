@@ -41,7 +41,10 @@ func scrapeReport(res scrape.Result, err error) []reportLine {
 
 	if err != nil {
 		var f *scrape.Failure
+		var d *scrape.Deferred
 		switch {
+		case errors.As(err, &d):
+			add(levelInfo, "  Deferred: ScreenScraper cut off the run; looked up again next run")
 		case !errors.As(err, &f):
 			add(levelError, "  Failed to get game info: %v", err)
 		case f.Stage == scrape.StageHash:

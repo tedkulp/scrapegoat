@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tedkulp/scrapegoat/internal/cutoff"
 	"github.com/tedkulp/scrapegoat/internal/scraper"
 )
 
@@ -49,6 +50,7 @@ type Placer struct {
 	mediaRoot  string
 	workers    int
 	httpClient *http.Client
+	cutoff     *cutoff.Cutoff
 	debug      io.Writer
 	debugMu    sync.Mutex
 }
@@ -59,6 +61,14 @@ type Option func(*Placer)
 // WithHTTPClient sets the HTTP client used to fetch media.
 func WithHTTPClient(c *http.Client) Option {
 	return func(p *Placer) { p.httpClient = c }
+}
+
+// WithCutoff shares a run's cutoff with the Placer. The Placer trips it when a
+// fetch gets a cutoff status, and fetches nothing once it is tripped, by
+// whoever. Files in the media cache are still placed. Without this option the
+// Placer keeps a cutoff of its own.
+func WithCutoff(c *cutoff.Cutoff) Option {
+	return func(p *Placer) { p.cutoff = c }
 }
 
 // WithDebugOutput sends debug logging to w. Without it the Placer logs nothing.
@@ -82,6 +92,9 @@ func New(cacheDir, platform, mediaRoot string, workers int, opts ...Option) *Pla
 	}
 	for _, opt := range opts {
 		opt(p)
+	}
+	if p.cutoff == nil {
+		p.cutoff = cutoff.New()
 	}
 	return p
 }
@@ -255,7 +268,10 @@ type Result struct {
 	Existing   int
 	FromCache  int
 	Downloaded int
-	Failed     int
+	// Deferred counts files not fetched because of a cutoff. They are not
+	// failures: a later run fetches them.
+	Deferred int
+	Failed   int
 	// Failures maps each failed media type to its error.
 	Failures map[string]error
 }
@@ -304,7 +320,10 @@ func (p *Placer) Execute(plan Plan) Result {
 	close(outcomes)
 
 	for o := range outcomes {
+		var ce *cutoff.Error
 		switch {
+		case errors.As(o.err, &ce):
+			res.Deferred++
 		case o.err != nil:
 			res.Failed++
 			res.Failures[o.item.MediaType] = o.err
@@ -344,12 +363,22 @@ func (p *Placer) place(it Item) error {
 }
 
 func (p *Placer) fetch(it Item) error {
+	if cause, ok := p.cutoff.Cause(); ok {
+		p.debugf("MEDIA: %s - DEFERRED (cutoff, no API call)", it.MediaType)
+		return &cutoff.Error{Cause: cause}
+	}
 	p.debugf("MEDIA: %s - DOWNLOADING (API call) %s", it.MediaType, redactURL(it.URL))
 	resp, err := p.httpClient.Get(it.URL)
 	if err != nil {
 		return fmt.Errorf("download %s: %w", it.MediaType, redactErr(err))
 	}
 	defer resp.Body.Close()
+	if cutoff.IsCutoffStatus(resp.StatusCode) {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		p.cutoff.Trip(resp.StatusCode, string(body))
+		cause, _ := p.cutoff.Cause()
+		return &cutoff.Error{Cause: cause, Err: fmt.Errorf("download %s: HTTP status %d", it.MediaType, resp.StatusCode)}
+	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download %s: HTTP status %d", it.MediaType, resp.StatusCode)
 	}

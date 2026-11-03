@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/tedkulp/scrapegoat/internal/artwork"
+	"github.com/tedkulp/scrapegoat/internal/cutoff"
 	"github.com/tedkulp/scrapegoat/internal/media"
 	"github.com/tedkulp/scrapegoat/internal/scrape"
 	"github.com/tedkulp/scrapegoat/internal/scraper"
@@ -30,6 +31,17 @@ func TestScrapeReport_LookupFailure(t *testing.T) {
 	want := []reportLine{
 		{level: levelVerbose, text: "  CRC32: abcd1234, MD5: 0123456789abcdef"},
 		{level: levelError, text: "  Failed to get game info: HTTP 423"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+}
+
+func TestScrapeReport_DeferredIsNotReportedAsAFailure(t *testing.T) {
+	got := scrapeReport(scrape.Result{Hashes: hashes}, &scrape.Deferred{Cause: cutoff.Cause{StatusCode: 430}})
+	want := []reportLine{
+		{level: levelVerbose, text: "  CRC32: abcd1234, MD5: 0123456789abcdef"},
+		{level: levelInfo, text: "  Deferred: ScreenScraper cut off the run; looked up again next run"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %+v, want %+v", got, want)

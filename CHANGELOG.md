@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `scrape` skips media files that already exist in the destination, and `--dry-run` reports how many would be downloaded and how many already exist. `--force-redownload` downloads them all again.
 - `user-info` shows the per-minute request limit and the failed-request quota (`Failed Requests Today: used / max`).
 - An MIT `LICENSE` file.
+- When ScreenScraper cuts a run off (bad developer credentials 403, API closed 423, software blacklisted 426, daily quota 430 or failed-request quota 431, from a lookup or a media download), `scrape` stops sending requests and prints one line naming the cause. Remaining ROMs are answered from the game cache, expired entries included; ROMs with no entry are deferred to the next run. Media already in the media cache is still placed.
 
 ### Changed
 
@@ -24,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--auto-delete` and `--artwork` accept `1`/`0` (any `strconv.ParseBool` value) as well as `true`/`false`. An unrecognised value, or `--cache-hours` of 0 or less, now stops the run with an error naming the flag instead of being silently ignored.
 - `{platform}` is expanded in `output.cache_dir` from the config file, not only in flag paths.
 - The end-of-run list says "Unmatched" instead of "Failed": `=== Unmatched ROMs ===`.
+- `scrape` exits with status 1 after a cutoff, once `gamelist.xml` is written. The summary adds `Deferred: N` and the cause.
 - The run summary counts each scrape outcome separately: `Scraped: N`, `Not found: N`, `Non-game: N` and `Failed: N` (a ROM that could not be hashed or looked up), instead of `Successful` and one combined count. "Average API calls per ROM" divides by the scraped count.
 - `--verbose` no longer prints the "Computing hashes...", "Querying ScreenScraper API...", "Placing N media files..." and "Generating artwork..." progress lines; the hashes, media and artwork lines that follow each step are unchanged.
 - Platform slugs follow one set of rules for `--platform` and `list-platforms`: one slug per platform name, the lower platform ID wins a shared slug, aliases beat name slugs, and `config.yaml` platforms beat both. Every slug `list-platforms` shows picks that row's platform. The long joined-up slugs made from all of a platform's names (such as `atari2600a26002600`) are gone.
@@ -34,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A used-up quota (or another cutoff) no longer turns every remaining ROM into an unmatched ROM: with `--auto-delete=true` the run used to delete ROMs that were never looked up. Deferred ROMs are never deleted or offered for deletion.
+- After a cutoff, `gamelist.xml` keeps the existing entries of deferred ROMs instead of dropping them.
 - Game lookups retry up to 3 times again, with 2 s and 4 s backoff, instead of failing on the first error.
 - A ROM cached as not found no longer crashes `scrape`; it is listed with the other unmatched ROMs.
 - `user-info` no longer prints blank per-hour, per-minute and per-second limits.

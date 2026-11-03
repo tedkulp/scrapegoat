@@ -4,11 +4,13 @@
 package scrape
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
 
 	"github.com/tedkulp/scrapegoat/internal/artwork"
+	"github.com/tedkulp/scrapegoat/internal/cutoff"
 	"github.com/tedkulp/scrapegoat/internal/media"
 	"github.com/tedkulp/scrapegoat/internal/scanner"
 	"github.com/tedkulp/scrapegoat/internal/scraper"
@@ -79,6 +81,15 @@ func (f *Failure) Error() string { return fmt.Sprintf("%s: %v", f.Stage, f.Err) 
 // Unwrap returns the underlying error.
 func (f *Failure) Unwrap() error { return f.Err }
 
+// Deferred is the error Scrape returns when a cutoff stopped the lookup. The
+// ROM is a deferred ROM: neither a scrape outcome nor a failure, and never
+// unmatched. A later run looks it up again.
+type Deferred struct {
+	Cause cutoff.Cause
+}
+
+func (d *Deferred) Error() string { return "deferred: " + d.Cause.String() }
+
 // Result is what scraping one ROM produced.
 type Result struct {
 	Outcome Outcome
@@ -121,6 +132,10 @@ func (s *Scraper) Scrape(rom scanner.ROMFile) (Result, error) {
 	}
 	answer, err := s.lookup.Lookup(s.systemID, rom.Filename, hashes)
 	if err != nil {
+		var ce *cutoff.Error
+		if errors.As(err, &ce) {
+			return Result{Hashes: hashes}, &Deferred{Cause: ce.Cause}
+		}
 		return Result{Hashes: hashes}, &Failure{Stage: StageLookup, Err: err}
 	}
 	res := Result{Hashes: hashes, Game: answer.Game, Cached: answer.Cached}
