@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The remaining-quota count shown during `scrape` also updates from the platform list request.
 - `--force-redownload` also skips the media cache, so every media file is fetched from ScreenScraper again (and counts against the daily quota). `--dry-run` applies it too, and reports how many files would come from the media cache.
 - A failed media download is always reported, and the `Media:` line counts it as failed. It does not fail the ROM.
+- `--auto-delete` and `--artwork` accept `1`/`0` (any `strconv.ParseBool` value) as well as `true`/`false`. An unrecognised value, or `--cache-hours` of 0 or less, now stops the run with an error naming the flag instead of being silently ignored.
+- `{platform}` is expanded in `output.cache_dir` from the config file, not only in flag paths.
+- The end-of-run list and summary say "Unmatched" instead of "Failed": `=== Unmatched ROMs ===` and `Unmatched: N`.
 
 ### Fixed
 

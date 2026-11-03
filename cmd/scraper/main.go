@@ -64,20 +64,8 @@ var versionCmd = &cobra.Command{
 	},
 }
 
-var (
-	// Scrape command flags
-	platformName    string
-	romDir          string
-	gamelistDir     string
-	mediaRootDir    string
-	cacheDir        string
-	workers         int
-	dryRun          bool
-	autoDelete      string // "true", "false", or "" (prompt user)
-	artworkFlag     string // "true", "false", or "" (use config)
-	cacheHours      int    // hours before cache expires (default: 12)
-	forceRedownload bool
-)
+// scrapeFlagValues is what Cobra binds the scrape flags into.
+var scrapeFlagValues scrapeFlags
 
 func init() {
 	// Root persistent flags
@@ -85,17 +73,17 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
 
 	// Scrape command flags
-	scrapeCmd.Flags().StringVarP(&platformName, "platform", "p", "", "platform/system name (required)")
-	scrapeCmd.Flags().StringVarP(&romDir, "rom-dir", "r", "", "ROM directory path (required)")
-	scrapeCmd.Flags().StringVarP(&gamelistDir, "gamelist-dir", "o", "", "directory for gamelist.xml output (default: same as rom-dir)")
-	scrapeCmd.Flags().StringVarP(&mediaRootDir, "media-root-dir", "m", "", "root directory for media files (default: same as rom-dir)")
-	scrapeCmd.Flags().StringVar(&cacheDir, "cache-dir", "", "cache directory for the platform catalog, game lookups and media (default: output.cache_dir, then ~/.scrapegoat)")
-	scrapeCmd.Flags().IntVarP(&workers, "workers", "w", 4, "number of concurrent download workers")
-	scrapeCmd.Flags().BoolVar(&dryRun, "dry-run", false, "scan and query API but don't download or write files")
-	scrapeCmd.Flags().StringVar(&autoDelete, "auto-delete", "", "automatically delete failed ROMs: true=delete, false=keep, unset=prompt (default: prompt)")
-	scrapeCmd.Flags().StringVar(&artworkFlag, "artwork", "", "enable/disable artwork generation: true=enable, false=disable, unset=use config (default: use config)")
-	scrapeCmd.Flags().IntVar(&cacheHours, "cache-hours", 12, "hours before cache expires for both platforms and ROM metadata (default: 12)")
-	scrapeCmd.Flags().BoolVar(&forceRedownload, "force-redownload", false, "re-download every media file from ScreenScraper, skipping both the media root and the media cache (counts against the daily quota)")
+	scrapeCmd.Flags().StringVarP(&scrapeFlagValues.platform, "platform", "p", "", "platform/system name (required)")
+	scrapeCmd.Flags().StringVarP(&scrapeFlagValues.romDir, "rom-dir", "r", "", "ROM directory path (required)")
+	scrapeCmd.Flags().StringVarP(&scrapeFlagValues.gamelistDir, "gamelist-dir", "o", "", "directory for gamelist.xml output (default: same as rom-dir)")
+	scrapeCmd.Flags().StringVarP(&scrapeFlagValues.mediaRootDir, "media-root-dir", "m", "", "root directory for media files (default: same as rom-dir)")
+	scrapeCmd.Flags().StringVar(&scrapeFlagValues.cacheDir, "cache-dir", "", "cache directory for the platform catalog, game lookups and media (default: output.cache_dir, then ~/.scrapegoat)")
+	scrapeCmd.Flags().IntVarP(&scrapeFlagValues.workers, "workers", "w", 4, "number of concurrent download workers")
+	scrapeCmd.Flags().BoolVar(&scrapeFlagValues.dryRun, "dry-run", false, "scan and query API but don't download or write files")
+	scrapeCmd.Flags().StringVar(&scrapeFlagValues.autoDelete, "auto-delete", "", "delete unmatched ROMs (not found, non-game, or failed): true/1=delete, false/0=keep, unset=prompt (default: prompt)")
+	scrapeCmd.Flags().StringVar(&scrapeFlagValues.artwork, "artwork", "", "enable/disable artwork generation: true/1=enable, false/0=disable, unset=use config (default: use config)")
+	scrapeCmd.Flags().IntVar(&scrapeFlagValues.cacheHours, "cache-hours", 12, "hours before cache expires for both platforms and ROM metadata, must be greater than 0")
+	scrapeCmd.Flags().BoolVar(&scrapeFlagValues.forceRedownload, "force-redownload", false, "re-download every media file from ScreenScraper, skipping both the media root and the media cache (counts against the daily quota)")
 
 	scrapeCmd.MarkFlagRequired("platform")
 	scrapeCmd.MarkFlagRequired("rom-dir")
@@ -212,41 +200,22 @@ func runScraper(cmd *cobra.Command, args []string) {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	// Set cache expiration time for both platforms and ROM metadata
-	cfg.SetCacheExpiration(cacheHours)
+	settings, err := resolveScrapeSettings(scrapeFlagValues, cfg)
+	if err != nil {
+		log.Fatalf("Invalid scrape settings: %v", err)
+	}
+	platformName := settings.PlatformName
+	romDir := settings.ROMDir
+	gamelistDir := settings.GamelistDir
+	mediaRootDir := settings.MediaRootDir
+	cacheDir := settings.CacheDir
+	dryRun := settings.DryRun
 
-	// Resolve the cache directory before the platform lookup, so
-	// platforms.json lives in the same directory as every other cache.
-	cacheDir = resolveCacheDir(cfg, cacheDir, platformName)
-
-	// Get platform configuration
-	platform, err := cfg.GetPlatform(platformName)
+	// Get platform configuration; platforms.json lives in the resolved
+	// cache dir, like every other cache.
+	platform, err := cfg.GetPlatform(platformName, cacheDir, settings.CacheHours)
 	if err != nil {
 		log.Fatalf("Failed to get platform configuration: %v", err)
-	}
-
-	// Expand template variables in paths
-	romDir = expandPathTemplate(romDir, platformName)
-	gamelistDir = expandPathTemplate(gamelistDir, platformName)
-	mediaRootDir = expandPathTemplate(mediaRootDir, platformName)
-
-	// Set default directories to rom-dir if not specified
-	if gamelistDir == "" {
-		gamelistDir = romDir
-	}
-
-	if mediaRootDir == "" {
-		mediaRootDir = romDir
-	}
-
-	// Override artwork config with command-line flag if provided
-	if artworkFlag != "" {
-		artworkFlagLower := strings.ToLower(strings.TrimSpace(artworkFlag))
-		if artworkFlagLower == "true" {
-			cfg.Artwork.Enabled = true
-		} else if artworkFlagLower == "false" {
-			cfg.Artwork.Enabled = false
-		}
 	}
 
 	logInfo("Scrapegoat - ROM Scraper")
@@ -278,7 +247,7 @@ func runScraper(cmd *cobra.Command, args []string) {
 
 	// Step 2: Initialize scraper client
 	scraperClient := scraper.NewClient(cfg.ScreenScraper.Credentials(),
-		scraper.WithCache(cacheDir, cfg.GetCacheExpiration()),
+		scraper.WithCache(cacheDir, settings.CacheHours),
 		scraper.WithDebug(verbose),
 	)
 
@@ -286,12 +255,12 @@ func runScraper(cmd *cobra.Command, args []string) {
 	if verbose {
 		mediaOpts = append(mediaOpts, media.WithDebugOutput(os.Stderr))
 	}
-	placer := media.New(cacheDir, platformName, mediaRootDir, workers, mediaOpts...)
-	mediaMode := media.Mode{DryRun: dryRun, Force: forceRedownload}
+	placer := media.New(cacheDir, platformName, mediaRootDir, settings.Workers, mediaOpts...)
+	mediaMode := media.Mode{DryRun: dryRun, Force: settings.ForceRedownload}
 
 	// Step 3.5: Initialize artwork compositor if enabled
 	var compositor *artwork.Compositor
-	if cfg.Artwork.Enabled && !dryRun {
+	if settings.ArtworkEnabled && !dryRun {
 		compositor = artwork.NewCompositor(cfg.Artwork, cacheDir)
 		compositor.SetVerbose(verbose)
 		logInfo("Artwork generation: Enabled")
@@ -304,8 +273,8 @@ func runScraper(cmd *cobra.Command, args []string) {
 	// Step 5: Process each ROM
 	logInfo("\nProcessing ROM files...")
 	successCount := 0
-	errorCount := 0
-	var failedROMs []scanner.ROMFile // Track ROMs that failed to process
+	unmatchedCount := 0
+	var unmatchedROMs []scanner.ROMFile // not found, non-game, or failed
 
 	for i, rom := range roms {
 		logInfo("\n[%d/%d] Processing: %s", i+1, len(roms), rom.Filename)
@@ -315,8 +284,8 @@ func runScraper(cmd *cobra.Command, args []string) {
 		hashes, err := scraper.HashROMFile(rom.Path)
 		if err != nil {
 			logError("  Failed to hash ROM: %v", err)
-			errorCount++
-			failedROMs = append(failedROMs, rom)
+			unmatchedCount++
+			unmatchedROMs = append(unmatchedROMs, rom)
 			continue
 		}
 		logVerbose("  CRC32: %s, MD5: %s", hashes.CRC32, hashes.MD5)
@@ -326,8 +295,8 @@ func runScraper(cmd *cobra.Command, args []string) {
 		result, err := scraperClient.Lookup(platform.ID, rom.Filename, hashes)
 		if err != nil {
 			logError("  Failed to get game info: %v", err)
-			errorCount++
-			failedROMs = append(failedROMs, rom)
+			unmatchedCount++
+			unmatchedROMs = append(unmatchedROMs, rom)
 			continue
 		}
 
@@ -337,8 +306,8 @@ func runScraper(cmd *cobra.Command, args []string) {
 			} else {
 				logError("  Failed to get game info: game not found in ScreenScraper database")
 			}
-			errorCount++
-			failedROMs = append(failedROMs, rom)
+			unmatchedCount++
+			unmatchedROMs = append(unmatchedROMs, rom)
 			continue
 		}
 
@@ -352,8 +321,8 @@ func runScraper(cmd *cobra.Command, args []string) {
 
 		if result.Outcome == scraper.OutcomeNonGame {
 			logInfo("  Skipping: Marked as non-game by ScreenScraper")
-			errorCount++
-			failedROMs = append(failedROMs, rom)
+			unmatchedCount++
+			unmatchedROMs = append(unmatchedROMs, rom)
 			continue
 		}
 
@@ -392,8 +361,8 @@ func runScraper(cmd *cobra.Command, args []string) {
 		// Add game to metadata
 		if err := gen.AddGameFromScraper(rom.Path, game); err != nil {
 			logError("  Failed to add game metadata: %v", err)
-			errorCount++
-			failedROMs = append(failedROMs, rom)
+			unmatchedCount++
+			unmatchedROMs = append(unmatchedROMs, rom)
 			continue
 		}
 
@@ -415,65 +384,16 @@ func runScraper(cmd *cobra.Command, args []string) {
 		logInfo("Media files location: %s", mediaRootDir)
 	}
 
-	// Handle failed ROMs - offer to delete them
-	if len(failedROMs) > 0 && !dryRun {
-		logInfo("\n=== Failed ROMs ===")
-		logInfo("The following ROMs failed to process:")
-		for i, rom := range failedROMs {
-			logInfo("  %d. %s", i+1, rom.Filename)
-		}
-
-		// Determine whether to delete based on auto-delete flag
-		var shouldDelete bool
-		autoDeleteLower := strings.ToLower(strings.TrimSpace(autoDelete))
-
-		if autoDeleteLower == "true" {
-			// Auto-delete enabled
-			shouldDelete = true
-			logInfo("\nAuto-deleting failed ROM files (--auto-delete=true)...")
-		} else if autoDeleteLower == "false" {
-			// Auto-delete explicitly disabled
-			shouldDelete = false
-			logInfo("\nKeeping failed ROM files (--auto-delete=false)")
-		} else {
-			// Prompt user (default behavior)
-			logInfo("\nWould you like to delete these ROM files? [y/N]: ")
-			var response string
-			fmt.Scanln(&response)
-			response = strings.ToLower(strings.TrimSpace(response))
-			shouldDelete = (response == "y" || response == "yes")
-		}
-
-		if shouldDelete {
-			if autoDeleteLower != "true" {
-				logInfo("\nDeleting failed ROM files...")
-			}
-			deletedCount := 0
-			deleteErrors := 0
-
-			for _, rom := range failedROMs {
-				if err := os.Remove(rom.Path); err != nil {
-					logError("  Failed to delete %s: %v", rom.Filename, err)
-					deleteErrors++
-				} else {
-					logInfo("  Deleted: %s", rom.Filename)
-					deletedCount++
-				}
-			}
-
-			logInfo("\nDeletion complete: %d deleted, %d errors", deletedCount, deleteErrors)
-		} else {
-			if autoDeleteLower != "false" {
-				logInfo("\nSkipping deletion. Failed ROM files were kept.")
-			}
-		}
+	// Apply the unmatched ROM disposition (keep, delete, or ask)
+	if len(unmatchedROMs) > 0 && !dryRun {
+		handleUnmatchedROMs(settings.UnmatchedDisposition, unmatchedROMs)
 	}
 
 	// Summary
 	logInfo("\n=== Summary ===")
 	logInfo("Total ROMs processed: %d", len(roms))
 	logInfo("Successful: %d", successCount)
-	logInfo("Failed: %d", errorCount)
+	logInfo("Unmatched: %d", unmatchedCount)
 
 	// API call statistics
 	if totalAPICalls := scraperClient.RequestCount(); totalAPICalls > 0 && !dryRun {
@@ -496,8 +416,50 @@ func runScraper(cmd *cobra.Command, args []string) {
 	if verbose {
 		logInfo("\n=== Cache Info ===")
 		logInfo("Cache directory: %s/games", cacheDir)
-		logInfo("%s", cacheDurationMessage(cfg.GetCacheExpiration()))
+		logInfo("%s", cacheDurationMessage(settings.CacheHours))
 	}
+}
+
+// handleUnmatchedROMs lists the unmatched ROMs, applies the disposition with
+// stdin as the prompt and os.Remove as the remover, and logs the outcome.
+func handleUnmatchedROMs(d unmatchedDisposition, roms []scanner.ROMFile) {
+	logInfo("\n=== Unmatched ROMs ===")
+	logInfo("The following ROMs were not found, were marked non-game, or failed:")
+	for i, rom := range roms {
+		logInfo("  %d. %s", i+1, rom.Filename)
+	}
+
+	readLine := lineReader(os.Stdin)
+	prompt := func() (string, error) {
+		logInfo("\nWould you like to delete these ROM files? [y/N]: ")
+		return readLine()
+	}
+
+	switch d {
+	case dispositionDelete:
+		logInfo("\nAuto-deleting unmatched ROM files (--auto-delete=true)...")
+	case dispositionKeep:
+		logInfo("\nKeeping unmatched ROM files (--auto-delete=false)")
+	}
+
+	res := disposeUnmatchedROMs(d, roms, prompt, os.Remove)
+
+	if !res.Deleting {
+		if d == dispositionAsk {
+			logInfo("\nSkipping deletion. Unmatched ROM files were kept.")
+		}
+		return
+	}
+	if d == dispositionAsk {
+		logInfo("\nDeleting unmatched ROM files...")
+	}
+	for _, rom := range res.Deleted {
+		logInfo("  Deleted: %s", rom.Filename)
+	}
+	for _, f := range res.Failed {
+		logError("  Failed to delete %s: %v", f.ROM.Filename, f.Err)
+	}
+	logInfo("\nDeletion complete: %d deleted, %d errors", len(res.Deleted), len(res.Failed))
 }
 
 func cacheDurationMessage(hours int) string {
@@ -539,27 +501,6 @@ func logVerbose(format string, args ...interface{}) {
 
 func logError(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
-}
-
-// resolveCacheDir returns the effective cache directory: the --cache-dir
-// flag with {platform} expanded if given, otherwise output.cache_dir from
-// the config. It stores the result in cfg.Output.CacheDir so the platform
-// cache (platforms.json) uses it too.
-func resolveCacheDir(cfg *config.Config, flagValue, platformName string) string {
-	dir := expandPathTemplate(flagValue, platformName)
-	if dir == "" {
-		dir = cfg.Output.CacheDir
-	}
-	cfg.Output.CacheDir = dir
-	return dir
-}
-
-// expandPathTemplate replaces template variables in a path string
-// Currently supports: {platform}
-func expandPathTemplate(path string, platformName string) string {
-	// Replace {platform} with the actual platform name
-	path = strings.ReplaceAll(path, "{platform}", platformName)
-	return path
 }
 
 func quotaLines(userInfo *scraper.UserInfo) []string {

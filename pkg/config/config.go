@@ -16,12 +16,10 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	ScreenScraper  ScreenScraperConfig `mapstructure:"screenscraper"`
-	Platforms      map[string]Platform `mapstructure:"platforms"`
-	Output         OutputConfig        `mapstructure:"output"`
-	Artwork        artwork.Config      `mapstructure:"artwork"`
-	platformsCache *PlatformsCache
-	cacheExpHours  int // Cache expiration in hours for platforms and ROM metadata (default: 12)
+	ScreenScraper ScreenScraperConfig `mapstructure:"screenscraper"`
+	Platforms     map[string]Platform `mapstructure:"platforms"`
+	Output        OutputConfig        `mapstructure:"output"`
+	Artwork       artwork.Config      `mapstructure:"artwork"`
 }
 
 // ScreenScraperConfig holds API authentication credentials
@@ -133,37 +131,24 @@ func (s ScreenScraperConfig) Credentials() scraper.Credentials {
 	}
 }
 
-// SetCacheExpiration sets the cache expiration time in hours for both platforms and ROM metadata
-func (c *Config) SetCacheExpiration(hours int) {
-	c.cacheExpHours = hours
-}
-
-// GetCacheExpiration returns the cache expiration time in hours
-func (c *Config) GetCacheExpiration() int {
-	if c.cacheExpHours <= 0 {
-		return 12 // default
-	}
-	return c.cacheExpHours
-}
-
-// GetPlatform returns platform configuration by name
-// If not found in config.yaml, attempts to fetch from ScreenScraper API
-func (c *Config) GetPlatform(name string) (Platform, error) {
+// GetPlatform returns platform configuration by name. Entries in
+// config.yaml win; otherwise the platform comes from
+// <cacheDir>/platforms.json, refetched from the ScreenScraper API when it is
+// missing or older than cacheHours.
+func (c *Config) GetPlatform(name, cacheDir string, cacheHours int) (Platform, error) {
 	// First, try static platforms from config.yaml
 	platform, ok := c.Platforms[name]
 	if ok {
 		return platform, nil
 	}
 
-	// If not in config, fetch from API cache
-	if c.platformsCache == nil {
-		if err := c.loadPlatformsFromAPI(); err != nil {
-			return Platform{}, fmt.Errorf("platform %s not found and failed to fetch from API: %w", name, err)
-		}
+	cache, err := c.loadPlatforms(cacheDir, cacheHours)
+	if err != nil {
+		return Platform{}, fmt.Errorf("platform %s not found and failed to fetch from API: %w", name, err)
 	}
 
 	// Try to find platform in cache by name (case-insensitive)
-	platform, ok = c.platformsCache.FindByName(name)
+	platform, ok = cache.FindByName(name)
 	if !ok {
 		return Platform{}, fmt.Errorf("platform %s not found in configuration or API", name)
 	}
@@ -188,24 +173,28 @@ func (pc *PlatformsCache) IsExpired(expirationHours int) bool {
 	return time.Since(pc.FetchedAt) > time.Duration(expirationHours)*time.Hour
 }
 
-// loadPlatformsFromAPI fetches platforms from ScreenScraper and caches them
-func (c *Config) loadPlatformsFromAPI() error {
-	cacheFile := filepath.Join(c.Output.CacheDir, "platforms.json")
+// fetchSystemsList asks ScreenScraper for its systems list. Tests replace it.
+var fetchSystemsList = func(creds scraper.Credentials) ([]scraper.System, error) {
+	return scraper.NewClient(creds).GetSystemsList()
+}
+
+// loadPlatforms reads <cacheDir>/platforms.json, or fetches the platforms
+// from ScreenScraper and rewrites that file when it is missing or older than
+// cacheHours.
+func (c *Config) loadPlatforms(cacheDir string, cacheHours int) (*PlatformsCache, error) {
+	cacheFile := filepath.Join(cacheDir, "platforms.json")
 
 	// Try to load from cache file first
-	if cache, err := loadPlatformsCache(cacheFile); err == nil && !cache.IsExpired(c.GetCacheExpiration()) {
+	if cache, err := loadPlatformsCache(cacheFile); err == nil && !cache.IsExpired(cacheHours) {
 		// Apply platform aliases even when loading from cache
 		applyPlatformAliases(cache.Platforms)
-		c.platformsCache = cache
-		return nil
+		return cache, nil
 	}
 
 	// Cache is expired or doesn't exist, fetch from API
-	client := scraper.NewClient(c.ScreenScraper.Credentials())
-
-	systems, err := client.GetSystemsList()
+	systems, err := fetchSystemsList(c.ScreenScraper.Credentials())
 	if err != nil {
-		return fmt.Errorf("failed to fetch systems list from API: %w", err)
+		return nil, fmt.Errorf("failed to fetch systems list from API: %w", err)
 	}
 
 	// Convert systems to platforms map
@@ -263,8 +252,7 @@ func (c *Config) loadPlatformsFromAPI() error {
 		fmt.Fprintf(os.Stderr, "Warning: failed to save platforms cache: %v\n", err)
 	}
 
-	c.platformsCache = cache
-	return nil
+	return cache, nil
 }
 
 // loadPlatformsCache loads the cached platforms from disk
