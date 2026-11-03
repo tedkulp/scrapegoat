@@ -412,9 +412,7 @@ func getJSONWithRetry[T any](c *Client, endpoint string, params url.Values) (*T,
 			if !isTransientStatus(resp.StatusCode) {
 				se := &StatusError{StatusCode: resp.StatusCode, Body: string(body)}
 				if cutoff.IsCutoffStatus(resp.StatusCode) {
-					c.cutoff.Trip(resp.StatusCode, se.Body)
-					cause, _ := c.cutoff.Cause()
-					return nil, &cutoff.Error{Cause: cause, Err: se}
+					return nil, c.cutoff.TripError(resp.StatusCode, se.Body, se)
 				}
 				return nil, se
 			}

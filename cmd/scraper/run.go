@@ -27,8 +27,8 @@ type romLoop struct {
 	// are carried over from.
 	gamelistPath string
 	// quota reports the latest known quota, printed after each scraped ROM.
-	quota func() scraper.Quota
-	print func([]reportLine)
+	quota  func() scraper.Quota
+	report func([]reportLine)
 
 	existing     *metadata.Existing
 	existingRead bool
@@ -37,17 +37,17 @@ type romLoop struct {
 func (l *romLoop) run(roms []scanner.ROMFile) runTally {
 	var tally runTally
 	for i, rom := range roms {
-		l.print([]reportLine{{levelInfo, fmt.Sprintf("\n[%d/%d] Processing: %s", i+1, len(roms), rom.Filename)}})
+		l.report([]reportLine{{levelInfo, fmt.Sprintf("\n[%d/%d] Processing: %s", i+1, len(roms), rom.Filename)}})
 
 		res, err := l.scraper.Scrape(rom)
-		l.print(scrapeReport(res, err))
+		l.report(scrapeReport(res, err))
 		tally.record(rom, res, err)
 		l.addGamelistEntry(rom, res, err)
 
 		if tally.cutoff == nil {
 			if cause, ok := l.cutoff.Cause(); ok {
 				tally.cutoff = &cause
-				l.print([]reportLine{{levelError, fmt.Sprintf("%s: remaining ROMs deferred", cause)}})
+				l.report([]reportLine{{levelError, fmt.Sprintf("%s: remaining ROMs deferred", cause)}})
 			}
 		}
 	}
@@ -69,7 +69,7 @@ func (l *romLoop) addGamelistEntry(rom scanner.ROMFile, res scrape.Result, err e
 		l.gen.AddGameFromScraper(rom.Path, res.Game)
 		if l.quota != nil {
 			if quota := l.quota(); quota.Known {
-				l.print([]reportLine{{levelInfo, fmt.Sprintf("  API Quota: %d requests remaining today", quota.Remaining())}})
+				l.report([]reportLine{{levelInfo, fmt.Sprintf("  API Quota: %d requests remaining today", quota.Remaining())}})
 			}
 		}
 	}
@@ -82,7 +82,7 @@ func (l *romLoop) existingGamelist() *metadata.Existing {
 		l.existingRead = true
 		existing, err := metadata.ReadExisting(l.gamelistPath)
 		if err != nil {
-			l.print([]reportLine{{levelError, fmt.Sprintf("Warning: cannot carry over deferred ROMs' gamelist entries: %v", err)}})
+			l.report([]reportLine{{levelError, fmt.Sprintf("Warning: cannot carry over deferred ROMs' gamelist entries: %v", err)}})
 		}
 		l.existing = existing
 	}

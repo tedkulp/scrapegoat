@@ -72,6 +72,15 @@ func (c *Cutoff) Trip(status int, body string) bool {
 	return true
 }
 
+// TripError trips the cutoff for a response with status and body and returns
+// the error for that response: a *Error carrying the run's first cause and
+// wrapping err.
+func (c *Cutoff) TripError(status int, body string, err error) *Error {
+	c.Trip(status, body)
+	cause, _ := c.Cause()
+	return &Error{Cause: cause, Err: err}
+}
+
 // Tripped reports whether the run has been cut off.
 func (c *Cutoff) Tripped() bool {
 	_, ok := c.Cause()

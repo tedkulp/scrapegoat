@@ -64,6 +64,16 @@ func TestCutoff_FirstOfConcurrentTripsWins(t *testing.T) {
 	}
 }
 
+func TestTripError_CarriesTheFirstCauseAndWrapsTheResponseError(t *testing.T) {
+	c := New()
+	c.Trip(430, "quota")
+	resp := errors.New("status 403")
+	err := c.TripError(403, "creds", resp)
+	if err.Cause.StatusCode != 430 || !errors.Is(err, resp) {
+		t.Errorf("TripError = %+v, want first cause 430 wrapping the response error", err)
+	}
+}
+
 func TestCause_StringNamesTheCauseAndStatus(t *testing.T) {
 	got := Cause{StatusCode: 430, Body: "ignored here"}.String()
 	want := "ScreenScraper daily quota exceeded (430)"

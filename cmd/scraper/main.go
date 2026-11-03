@@ -269,7 +269,7 @@ func runScraper(cmd *cobra.Command, args []string) {
 		gen:          gen,
 		gamelistPath: gamelistPath,
 		quota:        scraperClient.Quota,
-		print:        printReport,
+		report:       printReport,
 	}
 
 	logInfo("\nProcessing ROM files...")

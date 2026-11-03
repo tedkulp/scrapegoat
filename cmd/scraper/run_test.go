@@ -17,7 +17,6 @@ import (
 // scriptedScraper answers each ROM from a script; a step may trip the cutoff,
 // as the lookup client or media module would.
 type scriptedScraper struct {
-	cut   *cutoff.Cutoff
 	steps map[string]func() (scrape.Result, error)
 }
 
@@ -50,7 +49,7 @@ func TestRomLoop_CutoffDefersROMsWithoutMakingThemUnmatched(t *testing.T) {
 		return scanner.ROMFile{Path: filepath.Join(dir, name), Filename: name}
 	}
 	roms := []scanner.ROMFile{rom("ok.nes"), rom("nf.nes"), rom("d1.nes"), rom("cached-nf.nes"), rom("d2.nes")}
-	s := &scriptedScraper{cut: cut, steps: map[string]func() (scrape.Result, error){
+	s := &scriptedScraper{steps: map[string]func() (scrape.Result, error){
 		"ok.nes":        returns(scrape.Result{Outcome: scrape.OutcomeScraped, Game: game("Fresh")}, nil),
 		"nf.nes":        returns(scrape.Result{Outcome: scrape.OutcomeNotFound}, nil),
 		"d1.nes":        deferredBy(cut),
@@ -60,7 +59,7 @@ func TestRomLoop_CutoffDefersROMsWithoutMakingThemUnmatched(t *testing.T) {
 	var printed []reportLine
 	gen := metadata.NewGenerator(dir, dir)
 	loop := &romLoop{scraper: s, cutoff: cut, gen: gen, gamelistPath: gamelistPath,
-		print: func(lines []reportLine) { printed = append(printed, lines...) }}
+		report: func(lines []reportLine) { printed = append(printed, lines...) }}
 
 	tally := loop.run(roms)
 
@@ -137,7 +136,7 @@ func TestRomLoop_MediaCutoffIsAnnouncedWithoutDeferredROMs(t *testing.T) {
 		},
 	}}
 	var printed []reportLine
-	loop := &romLoop{scraper: s, cutoff: cut, print: func(l []reportLine) { printed = append(printed, l...) }}
+	loop := &romLoop{scraper: s, cutoff: cut, report: func(l []reportLine) { printed = append(printed, l...) }}
 
 	tally := loop.run([]scanner.ROMFile{{Path: "/r/a.nes", Filename: "a.nes"}})
 
@@ -157,7 +156,7 @@ func TestRomLoop_RunWithoutCutoffKeepsExitZeroAndSummary(t *testing.T) {
 	s := &scriptedScraper{steps: map[string]func() (scrape.Result, error){
 		"a.nes": returns(scrape.Result{}, &scrape.Failure{Stage: scrape.StageLookup, Err: errors.New("HTTP 400")}),
 	}}
-	loop := &romLoop{scraper: s, cutoff: cut, print: func([]reportLine) {}}
+	loop := &romLoop{scraper: s, cutoff: cut, report: func([]reportLine) {}}
 
 	tally := loop.run([]scanner.ROMFile{{Path: "/r/a.nes", Filename: "a.nes"}})
 

@@ -375,9 +375,8 @@ func (p *Placer) fetch(it Item) error {
 	defer resp.Body.Close()
 	if cutoff.IsCutoffStatus(resp.StatusCode) {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		p.cutoff.Trip(resp.StatusCode, string(body))
-		cause, _ := p.cutoff.Cause()
-		return &cutoff.Error{Cause: cause, Err: fmt.Errorf("download %s: HTTP status %d", it.MediaType, resp.StatusCode)}
+		return p.cutoff.TripError(resp.StatusCode, string(body),
+			fmt.Errorf("download %s: HTTP status %d", it.MediaType, resp.StatusCode))
 	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download %s: HTTP status %d", it.MediaType, resp.StatusCode)

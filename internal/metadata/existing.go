@@ -59,13 +59,13 @@ func ReadExisting(path string) (*Existing, error) {
 func pathKey(p string) string { return path.Clean(filepath.ToSlash(p)) }
 
 // CarryOver adds the existing entry for the ROM at romPath to the gamelist
-// unchanged, matched by <path> ("./" plus the ROM filename). It reports
+// unchanged, matched by <path> (the same path AddGameFromScraper writes). It reports
 // whether there was an entry to carry over.
 func (g *Generator) CarryOver(existing *Existing, romPath string) bool {
 	if existing == nil {
 		return false
 	}
-	entry, ok := existing.byPath[pathKey("./"+filepath.Base(romPath))]
+	entry, ok := existing.byPath[pathKey(entryPath(romPath))]
 	if ok {
 		g.entries = append(g.entries, entry)
 	}
