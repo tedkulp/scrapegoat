@@ -207,7 +207,7 @@ func (c *Config) loadPlatformsFromAPI() error {
 
 	// Convert systems to platforms map
 	platforms := make(map[string]Platform)
-	preferredRegions := []string{"us", "wor", "eu", "jp"}
+	preferredRegions := scraper.DefaultRegions()
 
 	for _, system := range systems {
 		name := system.GetPreferredName(preferredRegions)

@@ -26,7 +26,7 @@ func NewGenerator(romDir, mediaDir string) *Generator {
 		romDir:             romDir,
 		mediaDir:           mediaDir,
 		gameList:           NewGameList(),
-		preferredRegions:   []string{"us", "wor", "eu", "jp"},
+		preferredRegions:   scraper.DefaultRegions(),
 		preferredLanguages: []string{"en", "us", "fr", "de", "es", "it", "pt"},
 	}
 }

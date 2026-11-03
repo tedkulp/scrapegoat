@@ -66,7 +66,7 @@ The main scraping workflow follows these steps:
 
 **ZIP Handling** (`hashZippedROM` in `internal/scraper/hasher.go`): When hashing ZIP files, the hasher extracts the ROM file inside and hashes that content, not the ZIP archive itself. This ensures accurate matching against ScreenScraper's database which uses ROM hashes, not archive hashes.
 
-**Region/Language Preferences** (`internal/scraper/types.go`): The `Game` type includes methods like `GetPreferredName()`, `GetPreferredMedia()`, and `GetPreferredSynopsis()` that accept preferred region/language lists and fall back through the list until a match is found.
+**Region/Language Preferences** (`internal/scraper/types.go`): The `Game` type includes methods like `GetPreferredName()`, `GetPreferredMedia()`, and `GetPreferredSynopsis()` that accept preferred region/language lists and fall back through the list until a match is found. `scraper.DefaultRegions()` is the one definition of the default region order (us, wor, eu, jp); callers use it rather than writing the list out.
 
 **Concurrent Downloads** (`Downloader.Download` in `internal/downloader/downloader.go`): Uses a worker pool pattern with channels. Jobs are sent to workers via a channel, results collected via another channel. The number of workers is configurable via `--workers` flag.
 
