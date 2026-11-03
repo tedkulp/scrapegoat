@@ -148,7 +148,7 @@ func runListPlatforms(cmd *cobra.Command, args []string) {
 	}
 
 	platforms := make([]platformInfo, 0, len(systems))
-	preferredRegions := []string{"us", "wor", "eu", "jp"}
+	preferredRegions := scraper.DefaultRegions()
 
 	for _, system := range systems {
 		fullName := system.GetPreferredName(preferredRegions)
@@ -347,7 +347,7 @@ func runScraper(cmd *cobra.Command, args []string) {
 		}
 
 		game := result.Game
-		gameName := game.GetPreferredName([]string{"us", "wor", "eu", "jp"})
+		gameName := game.GetPreferredName(scraper.DefaultRegions())
 		if result.Cached {
 			logInfo("  Found: %s (cached)", gameName)
 		} else {
@@ -597,7 +597,7 @@ func filterExistingMediaFiles(mediaFiles []downloader.MediaFile, mediaRootDir st
 
 func buildMediaFileList(game *scraper.Game, romFilename string) []downloader.MediaFile {
 	var mediaFiles []downloader.MediaFile
-	preferredRegions := []string{"us", "wor", "eu", "jp"}
+	preferredRegions := scraper.DefaultRegions()
 
 	// Get ROM name without extension for media filenames
 	romName := strings.TrimSuffix(romFilename, filepath.Ext(romFilename))
