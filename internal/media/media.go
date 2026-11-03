@@ -86,6 +86,9 @@ func New(cacheDir, platform, mediaRoot string, workers int, opts ...Option) *Pla
 	return p
 }
 
+// Root returns the media root the Placer places media under.
+func (p *Placer) Root() string { return p.mediaRoot }
+
 // Mode says how a plan is built.
 type Mode struct {
 	// DryRun marks a plan that will only be reported; Execute refuses it.

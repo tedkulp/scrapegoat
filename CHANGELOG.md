@@ -23,7 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A failed media download is always reported, and the `Media:` line counts it as failed. It does not fail the ROM.
 - `--auto-delete` and `--artwork` accept `1`/`0` (any `strconv.ParseBool` value) as well as `true`/`false`. An unrecognised value, or `--cache-hours` of 0 or less, now stops the run with an error naming the flag instead of being silently ignored.
 - `{platform}` is expanded in `output.cache_dir` from the config file, not only in flag paths.
-- The end-of-run list and summary say "Unmatched" instead of "Failed": `=== Unmatched ROMs ===` and `Unmatched: N`.
+- The end-of-run list says "Unmatched" instead of "Failed": `=== Unmatched ROMs ===`.
+- The run summary counts each scrape outcome separately: `Scraped: N`, `Not found: N`, `Non-game: N` and `Failed: N` (a ROM that could not be hashed or looked up), instead of `Successful` and one combined count. "Average API calls per ROM" divides by the scraped count.
+- `--verbose` no longer prints the "Computing hashes...", "Querying ScreenScraper API...", "Placing N media files..." and "Generating artwork..." progress lines; the hashes, media and artwork lines that follow each step are unchanged.
 
 ### Fixed
 

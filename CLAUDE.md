@@ -45,6 +45,7 @@ The application uses `config.yaml` for configuration, looked up as `./config.yam
 - `cmd/scraper/main.go` - CLI entry point using Cobra. Orchestrates the scraping workflow.
 - `pkg/config/` - Configuration loading via Viper. Handles YAML config parsing and validation.
 - `internal/scanner/` - ROM file discovery. Walks directories to find files with configured extensions.
+- `internal/scrape/` - The per-ROM scrape: hashes one ROM, looks it up, places its media and composes its artwork, and returns a typed scrape outcome. Prints nothing.
 - `internal/scraper/` - ScreenScraper API client, game cache and ROM hashing.
 - `internal/media/` - Media placement: picks one file per media type, plans where each comes from (media root, media cache or ScreenScraper), and fetches and writes them with a worker pool.
 - `internal/metadata/` - gamelist.xml generation for EmulationStation.
@@ -52,7 +53,7 @@ The application uses `config.yaml` for configuration, looked up as `./config.yam
 
 ### Workflow (`runScraper` in cmd/scraper/main.go)
 
-The main scraping workflow follows these steps:
+The main scraping workflow follows these steps. `runScraper` scans, then hands each ROM to `scrape.Scraper.Scrape` (`internal/scrape`), which does steps 2 to 5 and prints nothing; `runScraper` prints the per-ROM lines from the result (`scrapeReport` in `cmd/scraper/report.go`), adds scraped games to the gamelist, and tallies outcomes and the unmatched ROM list in one place (`runTally` in `cmd/scraper/tally.go`). The run summary prints `Scraped`, `Not found`, `Non-game` and `Failed` counts.
 
 1. **Scan** - `scanner.Scanner` walks the ROM directory to find files matching platform extensions
 2. **Hash** - `scraper.HashROMFile()` computes CRC32, MD5, SHA1 for each ROM. For ZIP files, extracts and hashes the ROM inside (not the ZIP container).
@@ -67,6 +68,8 @@ The main scraping workflow follows these steps:
 **ZIP Handling** (`hashZippedROM` in `internal/scraper/hasher.go`): When hashing ZIP files, the hasher extracts the ROM file inside and hashes that content, not the ZIP archive itself. This ensures accurate matching against ScreenScraper's database which uses ROM hashes, not archive hashes.
 
 **Region/Language Preferences** (`internal/scraper/types.go`): The `Game` type includes methods like `GetPreferredName()`, `GetPreferredMedia()`, and `GetPreferredSynopsis()` that accept preferred region/language lists and fall back through the list until a match is found. `scraper.DefaultRegions()` is the one definition of the default region order (us, wor, eu, jp); callers use it rather than writing the list out.
+
+**ROM Scrape** (`internal/scrape/scrape.go`): `scrape.New(lookup, placer, compositor, systemID, mode)` takes a one-method `scrape.Lookup` interface (satisfied by `*scraper.Client`; tests use a fake), the `*media.Placer`, an optional `*artwork.Compositor` (nil disables artwork) and a `media.Mode` fixed for the run. `Scrape(rom)` returns a `scrape.Result` whose `Outcome` is `OutcomeScraped`, `OutcomeNotFound` or `OutcomeNonGame`, with `Cached`, `Hashes`, `Game`, the media `Plan`, `DryRun`, the `media.Result` and the `artwork.Result`. A hash or lookup failure is an `error` of type `*scrape.Failure` recording the `Stage` (`StageHash`, `StageLookup`) and the underlying `Err`, not a fourth outcome. In dry-run a match is scraped with only the plan: nothing is written, no media is fetched and no artwork is composed.
 
 **Media Placement** (`internal/media/media.go`): `media.New(cacheDir, platform, mediaRoot, workers, opts...)` with options `WithHTTPClient` and `WithDebugOutput`; the package prints nothing else, and the CLI does the logging. `Plan` makes no requests and no writes. `Execute` fetches one ROM's files concurrently with a worker pool (`--workers`); ROMs stay sequential. Every write to the media cache and media root goes to a temp file in the same directory and is renamed into place. Each cached file has a media identity sidecar `<file>.json` holding the `systemeid`, `jeuid` and `media` query parameters of its ScreenScraper URL (never credentials or the host): a matching sidecar means the cached file is used, a different one means it is downloaded again, a missing one means the file is trusted and a sidecar written (adopted), and a URL without `jeuid` or `media` means the cached file is trusted with no sidecar. A zero-byte cached file counts as missing. The media root has an existence-only check and no sidecars. See `docs/adr/0001-media-cache-identity-sidecar.md`. `media.Types()` is the one list of media type folders; artwork layer validation (`artwork.MediaTypes`) uses it.
 
