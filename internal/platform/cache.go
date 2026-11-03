@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/tedkulp/scrapegoat/internal/scraper"
+	"github.com/tedkulp/scrapegoat/internal/screenscraper"
 )
 
 const (
@@ -26,9 +26,9 @@ type cacheFile struct {
 }
 
 type cachedSystem struct {
-	ID         int            `json:"id"`
-	Names      []scraper.Name `json:"names"`
-	Extensions []string       `json:"extensions"`
+	ID         int                  `json:"id"`
+	Names      []screenscraper.Name `json:"names"`
+	Extensions []string             `json:"extensions"`
 }
 
 func (c *Catalog) cachePath() string {
@@ -37,7 +37,7 @@ func (c *Catalog) cachePath() string {
 
 // systems returns the systems list from a fresh platforms.json, or fetches
 // it and rewrites that file.
-func (c *Catalog) systems() ([]scraper.System, error) {
+func (c *Catalog) systems() ([]screenscraper.System, error) {
 	if systems, ok := c.readCache(); ok {
 		return systems, nil
 	}
@@ -56,7 +56,7 @@ func (c *Catalog) systems() ([]scraper.System, error) {
 	return systems, nil
 }
 
-func (c *Catalog) readCache() ([]scraper.System, bool) {
+func (c *Catalog) readCache() ([]screenscraper.System, bool) {
 	data, err := os.ReadFile(c.cachePath())
 	if err != nil {
 		return nil, false
@@ -68,14 +68,14 @@ func (c *Catalog) readCache() ([]scraper.System, bool) {
 	if c.opts.Clock.Now().Sub(f.FetchedAt) > c.opts.Expiry {
 		return nil, false
 	}
-	systems := make([]scraper.System, len(f.Systems))
+	systems := make([]screenscraper.System, len(f.Systems))
 	for i, s := range f.Systems {
-		systems[i] = scraper.System{ID: s.ID, Names: s.Names, Extensions: s.Extensions}
+		systems[i] = screenscraper.System{ID: s.ID, Names: s.Names, Extensions: s.Extensions}
 	}
 	return systems, true
 }
 
-func (c *Catalog) writeCache(systems []scraper.System) error {
+func (c *Catalog) writeCache(systems []screenscraper.System) error {
 	f := cacheFile{
 		Format:    cacheFormat,
 		FetchedAt: c.opts.Clock.Now(),

@@ -9,13 +9,13 @@ import (
 	"github.com/tedkulp/scrapegoat/internal/cutoff"
 	"github.com/tedkulp/scrapegoat/internal/media"
 	"github.com/tedkulp/scrapegoat/internal/scrape"
-	"github.com/tedkulp/scrapegoat/internal/scraper"
+	"github.com/tedkulp/scrapegoat/internal/screenscraper"
 )
 
-var hashes = &scraper.ROMHashes{CRC32: "abcd1234", MD5: "0123456789abcdef"}
+var hashes = &screenscraper.ROMHashes{CRC32: "abcd1234", MD5: "0123456789abcdef"}
 
-func game(name string) *scraper.Game {
-	return &scraper.Game{Names: []scraper.Name{{Region: "us", Text: name}}}
+func game(name string) *screenscraper.Game {
+	return &screenscraper.Game{Names: []screenscraper.Name{{Region: "us", Text: name}}}
 }
 
 func TestScrapeReport_HashFailure(t *testing.T) {

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tedkulp/scrapegoat/internal/scraper"
+	"github.com/tedkulp/scrapegoat/internal/screenscraper"
 )
 
 // Generator handles gamelist.xml generation
@@ -27,7 +27,7 @@ func NewGenerator(romDir, mediaDir string) *Generator {
 	return &Generator{
 		romDir:             romDir,
 		mediaDir:           mediaDir,
-		preferredRegions:   scraper.DefaultRegions(),
+		preferredRegions:   screenscraper.DefaultRegions(),
 		preferredLanguages: []string{"en", "us", "fr", "de", "es", "it", "pt"},
 	}
 }
@@ -43,7 +43,7 @@ func (g *Generator) SetPreferredLanguages(languages []string) {
 }
 
 // AddGameFromScraper converts ScreenScraper game data to gamelist.xml entry
-func (g *Generator) AddGameFromScraper(romPath string, game *scraper.Game) {
+func (g *Generator) AddGameFromScraper(romPath string, game *screenscraper.Game) {
 	// ROM path should be relative to gamelist.xml location (which is in romDir)
 	// EmulationStation expects paths like "./GameName.zip"
 	relRomPath := entryPath(romPath)

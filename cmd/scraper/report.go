@@ -6,7 +6,7 @@ import (
 
 	"github.com/tedkulp/scrapegoat/internal/media"
 	"github.com/tedkulp/scrapegoat/internal/scrape"
-	"github.com/tedkulp/scrapegoat/internal/scraper"
+	"github.com/tedkulp/scrapegoat/internal/screenscraper"
 )
 
 type reportLevel int
@@ -60,7 +60,7 @@ func scrapeReport(res scrape.Result, err error) []reportLine {
 		return lines
 	}
 
-	add(levelInfo, "  Found: %s%s", res.Game.GetPreferredName(scraper.DefaultRegions()), cached)
+	add(levelInfo, "  Found: %s%s", res.Game.GetPreferredName(screenscraper.DefaultRegions()), cached)
 
 	if res.Outcome == scrape.OutcomeNonGame {
 		add(levelInfo, "  Skipping: Marked as non-game by ScreenScraper")

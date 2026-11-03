@@ -9,14 +9,14 @@ import (
 	"testing"
 
 	"github.com/tedkulp/scrapegoat/internal/cutoff"
-	"github.com/tedkulp/scrapegoat/internal/scraper"
+	"github.com/tedkulp/scrapegoat/internal/screenscraper"
 )
 
 // allTypesGame has one file of every media type, so a plan has nine items.
-func allTypesGame(f *fixture) *scraper.Game {
-	game := &scraper.Game{}
+func allTypesGame(f *fixture) *screenscraper.Game {
+	game := &screenscraper.Game{}
 	for _, m := range typeMapping {
-		game.Medias = append(game.Medias, scraper.Media{Type: m.screenScraper, Region: "us", Format: "png", URL: f.url("42", m.screenScraper+"(us)")})
+		game.Medias = append(game.Medias, screenscraper.Media{Type: m.screenScraper, Region: "us", Format: "png", URL: f.url("42", m.screenScraper+"(us)")})
 	}
 	return game
 }

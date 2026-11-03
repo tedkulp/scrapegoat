@@ -9,16 +9,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tedkulp/scrapegoat/internal/scraper"
+	"github.com/tedkulp/scrapegoat/internal/screenscraper"
 )
 
 type fakeSource struct {
-	systems []scraper.System
+	systems []screenscraper.System
 	err     error
 	calls   int
 }
 
-func (f *fakeSource) GetSystemsList() ([]scraper.System, error) {
+func (f *fakeSource) GetSystemsList() ([]screenscraper.System, error) {
 	f.calls++
 	return f.systems, f.err
 }
@@ -29,8 +29,8 @@ func (c *fakeClock) Now() time.Time { return c.now }
 
 var t0 = time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
 
-func system(id int, name string, exts ...string) scraper.System {
-	return scraper.System{ID: id, Names: []scraper.Name{{Region: "us", Text: name}}, Extensions: exts}
+func system(id int, name string, exts ...string) screenscraper.System {
+	return screenscraper.System{ID: id, Names: []screenscraper.Name{{Region: "us", Text: name}}, Extensions: exts}
 }
 
 func newCatalog(src SystemsSource, dir string, clock Clock, configured map[string]Platform) *Catalog {
@@ -53,7 +53,7 @@ func mustLookup(t *testing.T, c *Catalog, slug string) Platform {
 }
 
 func TestLookup_FetchesAndExposesFirstNamePart(t *testing.T) {
-	src := &fakeSource{systems: []scraper.System{
+	src := &fakeSource{systems: []screenscraper.System{
 		system(42, "Atari ST,Atari STE,520 ST", ".st", ".msa"),
 	}}
 	c := newCatalog(src, t.TempDir(), &fakeClock{t0}, nil)
@@ -81,7 +81,7 @@ func TestLookup_FetchesAndExposesFirstNamePart(t *testing.T) {
 func TestLookup_CacheHitMakesNoRequest(t *testing.T) {
 	dir := t.TempDir()
 	clock := &fakeClock{t0}
-	src := &fakeSource{systems: []scraper.System{system(3, "NES,Famicom")}}
+	src := &fakeSource{systems: []screenscraper.System{system(3, "NES,Famicom")}}
 	mustLookup(t, newCatalog(src, dir, clock, nil), "nes")
 	if src.calls != 1 {
 		t.Fatalf("first run made %d requests, want 1", src.calls)
@@ -100,10 +100,10 @@ func TestLookup_CacheHitMakesNoRequest(t *testing.T) {
 func TestLookup_ExpiredCacheIsRefetchedAndRewritten(t *testing.T) {
 	dir := t.TempDir()
 	clock := &fakeClock{t0}
-	mustLookup(t, newCatalog(&fakeSource{systems: []scraper.System{system(3, "NES")}}, dir, clock, nil), "nes")
+	mustLookup(t, newCatalog(&fakeSource{systems: []screenscraper.System{system(3, "NES")}}, dir, clock, nil), "nes")
 
 	clock.now = t0.Add(13 * time.Hour)
-	src := &fakeSource{systems: []scraper.System{system(4, "Super Nintendo,SNES")}}
+	src := &fakeSource{systems: []screenscraper.System{system(4, "Super Nintendo,SNES")}}
 	if p := mustLookup(t, newCatalog(src, dir, clock, nil), "snes"); p.ID != 4 {
 		t.Fatalf("got %+v", p)
 	}
@@ -126,7 +126,7 @@ func TestLookup_OldFormatFileCountsAsExpired(t *testing.T) {
 		t.Fatal(err)
 	}
 	clock := &fakeClock{t0.Add(time.Minute)}
-	src := &fakeSource{systems: []scraper.System{system(3, "NES")}}
+	src := &fakeSource{systems: []screenscraper.System{system(3, "NES")}}
 	if p := mustLookup(t, newCatalog(src, dir, clock, nil), "nes"); p.ID != 3 {
 		t.Fatalf("got %+v, want the refetched platform", p)
 	}
@@ -143,7 +143,7 @@ func TestLookup_OldFormatFileCountsAsExpired(t *testing.T) {
 }
 
 func TestLookup_CollisionGoesToLowestID(t *testing.T) {
-	src := &fakeSource{systems: []scraper.System{
+	src := &fakeSource{systems: []screenscraper.System{
 		system(80, "Shared,Eighty"),
 		system(7, "Seven,Shared"),
 		system(50, "Shared"),
@@ -159,7 +159,7 @@ func TestLookup_CollisionGoesToLowestID(t *testing.T) {
 
 func TestLookup_AliasBeatsNameSlug(t *testing.T) {
 	// Alias atari2600 belongs to ID 26; ID 1 also has a name producing it.
-	src := &fakeSource{systems: []scraper.System{
+	src := &fakeSource{systems: []screenscraper.System{
 		system(1, "Atari 2600"),
 		system(26, "Atari2600 Variant,2600"),
 	}}
@@ -182,7 +182,7 @@ func TestLookup_ConfiguredBeatsAPIAndWorksOffline(t *testing.T) {
 		t.Fatalf("configured lookup made %d requests", src.calls)
 	}
 
-	src2 := &fakeSource{systems: []scraper.System{system(3, "NES")}}
+	src2 := &fakeSource{systems: []screenscraper.System{system(3, "NES")}}
 	c2 := newCatalog(src2, t.TempDir(), &fakeClock{t0}, map[string]Platform{"nes": {ID: 99, Name: "My NES"}})
 	entries, err := c2.List()
 	if err != nil {
@@ -196,7 +196,7 @@ func TestLookup_ConfiguredBeatsAPIAndWorksOffline(t *testing.T) {
 }
 
 func TestLookup_CaseInsensitive(t *testing.T) {
-	src := &fakeSource{systems: []scraper.System{system(3, "NES")}}
+	src := &fakeSource{systems: []screenscraper.System{system(3, "NES")}}
 	c := newCatalog(src, t.TempDir(), &fakeClock{t0}, map[string]Platform{"MyBox": {ID: 500, Name: "My Box"}})
 	if p := mustLookup(t, c, "NeS"); p.ID != 3 {
 		t.Fatalf("NeS -> %+v", p)
@@ -207,7 +207,7 @@ func TestLookup_CaseInsensitive(t *testing.T) {
 }
 
 func TestLookup_UnknownSlugNamesIt(t *testing.T) {
-	c := newCatalog(&fakeSource{systems: []scraper.System{system(3, "NES")}}, t.TempDir(), &fakeClock{t0}, nil)
+	c := newCatalog(&fakeSource{systems: []screenscraper.System{system(3, "NES")}}, t.TempDir(), &fakeClock{t0}, nil)
 	_, err := c.Lookup("nosuchbox")
 	if err == nil || !strings.Contains(err.Error(), "nosuchbox") {
 		t.Fatalf("err = %v, want one naming the slug", err)
@@ -223,7 +223,7 @@ func TestLookup_FetchFailureIsReported(t *testing.T) {
 }
 
 func TestList_DisplaySlugsResolveToTheirRow(t *testing.T) {
-	src := &fakeSource{systems: []scraper.System{
+	src := &fakeSource{systems: []screenscraper.System{
 		system(80, "Shared,Eighty Long"),
 		system(7, "Seven,Shared"),
 		system(26, "Atari2600,A2600,2600"),
@@ -258,7 +258,7 @@ func TestList_DisplaySlugsResolveToTheirRow(t *testing.T) {
 func TestList_FreshCacheMakesNoRequest(t *testing.T) {
 	dir := t.TempDir()
 	clock := &fakeClock{t0}
-	mustLookup(t, newCatalog(&fakeSource{systems: []scraper.System{system(3, "NES")}}, dir, clock, nil), "nes")
+	mustLookup(t, newCatalog(&fakeSource{systems: []screenscraper.System{system(3, "NES")}}, dir, clock, nil), "nes")
 	src := &fakeSource{}
 	if _, err := newCatalog(src, dir, clock, nil).List(); err != nil {
 		t.Fatal(err)
@@ -294,11 +294,11 @@ func TestLegacySlugMap_SlugsStillResolve(t *testing.T) {
 	}
 
 	// Rebuild the systems list the old map was made from.
-	byID := map[int]scraper.System{}
+	byID := map[int]screenscraper.System{}
 	for _, p := range legacy.Platforms {
 		byID[p.ID] = system(p.ID, p.Name, p.Extensions...)
 	}
-	var systems []scraper.System
+	var systems []screenscraper.System
 	for _, s := range byID {
 		systems = append(systems, s)
 	}

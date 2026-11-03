@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/gosimple/slug"
-	"github.com/tedkulp/scrapegoat/internal/scraper"
+	"github.com/tedkulp/scrapegoat/internal/screenscraper"
 )
 
 // Platform is a game system ScreenScraper catalogs.
@@ -24,9 +24,9 @@ type Platform struct {
 	Extensions []string // ROM file extensions, with a leading dot
 }
 
-// SystemsSource fetches ScreenScraper's systems list. *scraper.Client is one.
+// SystemsSource fetches ScreenScraper's systems list. *screenscraper.Client is one.
 type SystemsSource interface {
-	GetSystemsList() ([]scraper.System, error)
+	GetSystemsList() ([]screenscraper.System, error)
 }
 
 // Clock tells the catalog the time, for cache expiry.
@@ -171,8 +171,8 @@ func (c *Catalog) load() error {
 // build applies the slug rules: one slug per name part, collisions to the
 // lowest ID, then aliases over name slugs. Configured platforms are applied
 // at lookup time and beat all of these.
-func (c *Catalog) build(systems []scraper.System) {
-	regions := scraper.DefaultRegions()
+func (c *Catalog) build(systems []screenscraper.System) {
+	regions := screenscraper.DefaultRegions()
 	c.platforms = nil
 	for _, s := range systems {
 		names := splitNames(s.GetPreferredName(regions))

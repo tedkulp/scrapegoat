@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/tedkulp/scrapegoat/internal/cutoff"
-	"github.com/tedkulp/scrapegoat/internal/scraper"
+	"github.com/tedkulp/scrapegoat/internal/screenscraper"
 )
 
 var typeMapping = []struct{ screenScraper, mediaType string }{
@@ -168,11 +168,11 @@ func (pl Plan) Count(s Source) int {
 
 // Plan builds the media plan for a ROM. It makes no network requests and
 // writes nothing, so a dry run and a real run get the same plan.
-func (p *Placer) Plan(game *scraper.Game, romFilename string, mode Mode) Plan {
+func (p *Placer) Plan(game *screenscraper.Game, romFilename string, mode Mode) Plan {
 	romName := strings.TrimSuffix(romFilename, filepath.Ext(romFilename))
 	plan := Plan{dryRun: mode.DryRun}
 	for _, m := range typeMapping {
-		media := game.GetPreferredMedia(m.screenScraper, scraper.DefaultRegions())
+		media := game.GetPreferredMedia(m.screenScraper, screenscraper.DefaultRegions())
 		if media == nil || media.URL == "" {
 			continue
 		}

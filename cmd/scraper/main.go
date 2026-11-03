@@ -18,7 +18,7 @@ import (
 	"github.com/tedkulp/scrapegoat/internal/platform"
 	"github.com/tedkulp/scrapegoat/internal/scanner"
 	"github.com/tedkulp/scrapegoat/internal/scrape"
-	"github.com/tedkulp/scrapegoat/internal/scraper"
+	"github.com/tedkulp/scrapegoat/internal/screenscraper"
 	"github.com/tedkulp/scrapegoat/pkg/config"
 )
 
@@ -160,7 +160,7 @@ func newPlatformCatalog(cfg *config.Config, cacheDir string, cacheHours int) *pl
 		configured[slug] = platform.Platform{ID: p.ID, Name: p.Name, Extensions: p.Extensions}
 	}
 	return platform.New(platform.Options{
-		Source:     scraper.NewClient(screenScraperCredentials(cfg.ScreenScraper), scraper.WithDebug(verbose)),
+		Source:     screenscraper.NewClient(screenScraperCredentials(cfg.ScreenScraper), screenscraper.WithDebug(verbose)),
 		Configured: configured,
 		CacheDir:   cacheDir,
 		Expiry:     time.Duration(cacheHours) * time.Hour,
@@ -168,8 +168,8 @@ func newPlatformCatalog(cfg *config.Config, cacheDir string, cacheHours int) *pl
 }
 
 // screenScraperCredentials converts the config's credentials for the client.
-func screenScraperCredentials(c config.ScreenScraperConfig) scraper.Credentials {
-	return scraper.Credentials{
+func screenScraperCredentials(c config.ScreenScraperConfig) screenscraper.Credentials {
+	return screenscraper.Credentials{
 		DevID:        c.DevID,
 		DevPassword:  c.DevPassword,
 		UserID:       c.UserID,
@@ -233,10 +233,10 @@ func runScraper(cmd *cobra.Command, args []string) {
 	// Step 2: Initialize scraper client. One cutoff is shared by lookups and
 	// media, so after the first cutoff status neither sends a request.
 	cut := cutoff.New()
-	scraperClient := scraper.NewClient(screenScraperCredentials(cfg.ScreenScraper),
-		scraper.WithCache(cacheDir, settings.CacheHours),
-		scraper.WithDebug(verbose),
-		scraper.WithCutoff(cut),
+	scraperClient := screenscraper.NewClient(screenScraperCredentials(cfg.ScreenScraper),
+		screenscraper.WithCache(cacheDir, settings.CacheHours),
+		screenscraper.WithDebug(verbose),
+		screenscraper.WithCutoff(cut),
 	)
 
 	mediaOpts := []media.Option{media.WithCutoff(cut)}
@@ -412,7 +412,7 @@ func logError(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
 }
 
-func quotaLines(userInfo *scraper.UserInfo) []string {
+func quotaLines(userInfo *screenscraper.UserInfo) []string {
 	return []string{
 		fmt.Sprintf("Requests Today: %s", userInfo.RequestsToday),
 		fmt.Sprintf("Max Requests Per Day: %s", userInfo.MaxRequestsPerDay),
@@ -432,7 +432,7 @@ func runUserInfo(cmd *cobra.Command, args []string) {
 	logInfo("Fetching user information from ScreenScraper.fr...")
 
 	// Create scraper client
-	client := scraper.NewClient(screenScraperCredentials(cfg.ScreenScraper))
+	client := screenscraper.NewClient(screenScraperCredentials(cfg.ScreenScraper))
 
 	// Fetch user info
 	userInfo, err := client.GetUserInfo()

@@ -13,12 +13,12 @@ import (
 	"github.com/tedkulp/scrapegoat/internal/cutoff"
 	"github.com/tedkulp/scrapegoat/internal/media"
 	"github.com/tedkulp/scrapegoat/internal/scanner"
-	"github.com/tedkulp/scrapegoat/internal/scraper"
+	"github.com/tedkulp/scrapegoat/internal/screenscraper"
 )
 
-// Lookup asks which game a ROM is. *scraper.Client satisfies it.
+// Lookup asks which game a ROM is. *screenscraper.Client satisfies it.
 type Lookup interface {
-	Lookup(systemID int, romName string, hashes *scraper.ROMHashes) (scraper.LookupResult, error)
+	Lookup(systemID int, romName string, hashes *screenscraper.ROMHashes) (screenscraper.LookupResult, error)
 }
 
 // Outcome is what a scrape produced: scraped, not found, or non-game.
@@ -96,9 +96,9 @@ type Result struct {
 	// Cached reports whether the lookup answer came from the local cache.
 	Cached bool
 	// Hashes are the ROM's hashes.
-	Hashes *scraper.ROMHashes
+	Hashes *screenscraper.ROMHashes
 	// Game is set for scraped and non-game.
-	Game *scraper.Game
+	Game *screenscraper.Game
 	// Plan is the media plan (scraped only).
 	Plan media.Plan
 	// DryRun is true when the plan was only built, not carried out.
@@ -126,7 +126,7 @@ func New(lookup Lookup, placer *media.Placer, compositor *artwork.Compositor, sy
 
 // Scrape scrapes one ROM.
 func (s *Scraper) Scrape(rom scanner.ROMFile) (Result, error) {
-	hashes, err := scraper.HashROMFile(rom.Path)
+	hashes, err := screenscraper.HashROMFile(rom.Path)
 	if err != nil {
 		return Result{}, &Failure{Stage: StageHash, Err: err}
 	}
@@ -140,10 +140,10 @@ func (s *Scraper) Scrape(rom scanner.ROMFile) (Result, error) {
 	}
 	res := Result{Hashes: hashes, Game: answer.Game, Cached: answer.Cached}
 	switch answer.Outcome {
-	case scraper.OutcomeNotFound:
+	case screenscraper.OutcomeNotFound:
 		res.Outcome = OutcomeNotFound
 		return res, nil
-	case scraper.OutcomeNonGame:
+	case screenscraper.OutcomeNonGame:
 		res.Outcome = OutcomeNonGame
 		return res, nil
 	}
