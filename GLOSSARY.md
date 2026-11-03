@@ -22,6 +22,10 @@ _Avoid_: Success, done
 A ROM whose scrape ended as not found, non-game or a failure. Unmatched ROMs are what Scrapegoat offers to delete at the end of a run.
 _Avoid_: Failed ROM (not found and non-game ROMs did not fail), bad ROM
 
+**Unmatched ROM disposition**:
+What happens to a run's unmatched ROMs once the run ends: keep them, delete them, or ask the user.
+_Avoid_: Cleanup policy, auto-delete (that is the flag that chooses the disposition)
+
 ### Looking up a ROM
 
 **Lookup**:
