@@ -213,7 +213,7 @@ All caches live under `--cache-dir`, or `output.cache_dir` from the config file 
 
 | What | Where | Expires |
 |---|---|---|
-| Platform list (ScreenScraper's systems list as fetched) | `platforms.json` | after `--cache-hours` (12); a file from an older Scrapegoat version is fetched again once |
+| Platform catalog (ScreenScraper's systems list as fetched) | `platforms.json` | after `--cache-hours` (12); a file from an older Scrapegoat version is fetched again once |
 | Game lookups, including "not found" | `games/` | after `--cache-hours` (12) |
 | Media files | `cache/<platform>/<media-type>/` | never |
 | Composed artwork | `artwork-cache/` | never; rebuilt when an output's settings or the media its layers use change |

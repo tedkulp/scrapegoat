@@ -9,7 +9,6 @@ import (
 
 	"github.com/tedkulp/scrapegoat/internal/platform"
 	"github.com/tedkulp/scrapegoat/internal/scraper"
-	"github.com/tedkulp/scrapegoat/pkg/config"
 )
 
 type countingSource struct {
@@ -26,7 +25,7 @@ func testCatalog(src platform.SystemsSource, dir string) *platform.Catalog {
 	return platform.New(platform.Options{
 		Source: src,
 		Configured: map[string]platform.Platform{
-			"mybox": configuredPlatform(config.Platform{ID: 900, Name: "My Box,Box", Extensions: []string{".box"}}),
+			"mybox": {ID: 900, Name: "My Box,Box", Extensions: []string{".box"}},
 		},
 		CacheDir: dir,
 		Expiry:   time.Duration(defaultCacheHours) * time.Hour,

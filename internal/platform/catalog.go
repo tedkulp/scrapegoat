@@ -44,7 +44,9 @@ type Options struct {
 	// expired or in an old format.
 	Source SystemsSource
 	// Configured are the platforms from config.yaml, keyed by slug. They beat
-	// ScreenScraper platforms with the same slug and need no fetch.
+	// ScreenScraper platforms with the same slug and need no fetch. A Name
+	// may be comma-separated like ScreenScraper's; when Names is empty it is
+	// filled from Name, and Name becomes the first part.
 	Configured map[string]Platform
 	// CacheDir holds platforms.json.
 	CacheDir string
@@ -84,24 +86,24 @@ func New(opts Options) *Catalog {
 	}
 	configured := make(map[string]Platform, len(opts.Configured))
 	for s, p := range opts.Configured {
-		configured[strings.ToLower(s)] = p
+		configured[strings.ToLower(s)] = configuredPlatform(p)
 	}
 	return &Catalog{opts: opts, configured: configured}
 }
 
 // Lookup returns the platform a slug picks, ignoring case. Platforms from
 // config.yaml are checked first, without touching the cache or the network.
-func (c *Catalog) Lookup(name string) (Platform, error) {
-	key := strings.ToLower(name)
+func (c *Catalog) Lookup(platformSlug string) (Platform, error) {
+	key := strings.ToLower(platformSlug)
 	if p, ok := c.configured[key]; ok {
 		return p, nil
 	}
 	if err := c.load(); err != nil {
-		return Platform{}, fmt.Errorf("platform %s not found in configuration and failed to fetch from API: %w", name, err)
+		return Platform{}, fmt.Errorf("platform %s not found in configuration and failed to fetch from API: %w", platformSlug, err)
 	}
 	i, ok := c.slugs[key]
 	if !ok {
-		return Platform{}, fmt.Errorf("platform %s not found in configuration or API", name)
+		return Platform{}, fmt.Errorf("platform %s not found in configuration or API", platformSlug)
 	}
 	return c.platforms[i], nil
 }
@@ -207,6 +209,17 @@ func (c *Catalog) build(systems []scraper.System) {
 			c.slugs[a.slug] = i
 		}
 	}
+}
+
+// configuredPlatform fills Names from a config.yaml platform's Name.
+func configuredPlatform(p Platform) Platform {
+	if len(p.Names) == 0 {
+		p.Names = splitNames(p.Name)
+	}
+	if len(p.Names) > 0 {
+		p.Name = p.Names[0]
+	}
+	return p
 }
 
 // splitNames splits ScreenScraper's comma-separated name into its parts.

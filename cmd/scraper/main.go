@@ -44,7 +44,7 @@ Generates a gamelist.xml file compatible with EmulationStation.`,
 
 var listPlatformsCmd = &cobra.Command{
 	Use:   "list-platforms",
-	Short: "List all available platforms from ScreenScraper",
+	Short: "List every platform and the slug that picks it",
 	Long: `Lists every platform in the platform catalog: ScreenScraper's platforms and
 any defined in config.yaml (marked "(config)"), each with the slug that picks it.
 ScreenScraper's list is cached in <cache_dir>/platforms.json and refetched after 12 hours.`,
@@ -155,7 +155,7 @@ func listPlatforms(w io.Writer, catalog *platform.Catalog) error {
 func newPlatformCatalog(cfg *config.Config, cacheDir string, cacheHours int) *platform.Catalog {
 	configured := make(map[string]platform.Platform, len(cfg.Platforms))
 	for slug, p := range cfg.Platforms {
-		configured[slug] = configuredPlatform(p)
+		configured[slug] = platform.Platform{ID: p.ID, Name: p.Name, Extensions: p.Extensions}
 	}
 	return platform.New(platform.Options{
 		Source:     scraper.NewClient(screenScraperCredentials(cfg.ScreenScraper), scraper.WithDebug(verbose)),
@@ -163,21 +163,6 @@ func newPlatformCatalog(cfg *config.Config, cacheDir string, cacheHours int) *pl
 		CacheDir:   cacheDir,
 		Expiry:     time.Duration(cacheHours) * time.Hour,
 	})
-}
-
-// configuredPlatform turns a config.yaml platform into a catalog platform.
-// Its name may be comma-separated like ScreenScraper's.
-func configuredPlatform(p config.Platform) platform.Platform {
-	out := platform.Platform{ID: p.ID, Name: p.Name, Extensions: p.Extensions}
-	for _, n := range strings.Split(p.Name, ",") {
-		if n = strings.TrimSpace(n); n != "" {
-			out.Names = append(out.Names, n)
-		}
-	}
-	if len(out.Names) > 0 {
-		out.Name = out.Names[0]
-	}
-	return out
 }
 
 // screenScraperCredentials converts the config's credentials for the client.
