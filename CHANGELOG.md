@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - When ScreenScraper cuts a run off (bad developer credentials 403, API closed 423, software blacklisted 426, daily quota 430 or failed-request quota 431, from a lookup or a media download), `scrape` stops sending requests and prints one line naming the cause. Remaining ROMs are answered from the game cache: fresh entries and expired matches. ROMs with no entry, or only an expired "not found" or non-game entry, are deferred to the next run and never deleted. Media already in the media cache is still placed.
 
 ### Changed
+- `--platform apple2gs` now picks Apple IIGS (217) instead of Apple II (86), whose names also include Apple IIGS. Apple IIGS had no slug of its own before.
 - The media cache is keyed by ScreenScraper system ID (`cache/<system-id>/`) instead of the `--platform` slug as typed, so slugs for the same platform (`nes`, `famicom`, `NES`) share one cache. The first scrape with a given `--platform` moves that slug's old `cache/<slug>/` folder into place, so nothing is downloaded again.
 
 - Only failures that can clear up on their own are retried: network errors, timeouts, an overloaded server (401, an HTML response), 429 and 5xx. Every other error stops after one request and names the cause, such as `ScreenScraper rejected developer credentials (403)` or `ScreenScraper daily quota exceeded (430)`.

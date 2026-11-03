@@ -245,7 +245,7 @@ Entries in `config.yaml` take priority over ScreenScraper platforms with the sam
 
 `--platform` takes a platform slug, matched without regard to case. ScreenScraper gives most platforms several comma-separated names (`Atari ST,Atari STE,520 ST,...`), and each name gives one slug: lowercased, accents and symbols transliterated, spaces and dashes removed (`atarist`, `atariste`, `520st`). Logs show the first name, e.g. `Platform: Atari ST (ID: 42)`.
 
-When two platforms produce the same slug, the one with the lower ID gets it. A few platforms have an alias, a slug Scrapegoat adds because none of their names produce the expected one (`atari2600`, `atari5200`, `tg16`, `ngp`, `gameandwatch`, `n64dd`, `virtualboy`, `prboom`); an alias beats any name slug, and a `config.yaml` platform beats both. A platform that does not exist stops the run with an error naming the slug.
+When two platforms produce the same slug, the one with the lower ID gets it. A few platforms have an alias, a slug Scrapegoat adds because none of their names produce the expected one (`atari2600`, `atari5200`, `tg16`, `ngp`, `gameandwatch`, `n64dd`, `virtualboy`, `prboom`, `apple2gs`); an alias beats any name slug, and a `config.yaml` platform beats both. A platform that does not exist stops the run with an error naming the slug.
 
 ## API limits
 

@@ -316,7 +316,12 @@ type legacySlugMap struct {
 // slugExceptions are slugs from the old slug map that knowingly resolve to a
 // different platform now (collisions now go to the lowest ID). Each was
 // approved by the maintainer; keys are slugs, values the new platform ID.
-var slugExceptions = map[string]int{}
+var slugExceptions = map[string]int{
+	// Apple II (86) also lists Apple IIGS among its names, so the old map
+	// sent apple2gs there and Apple IIGS (217) had no slug of its own. The
+	// apple2gs alias gives it the name EmulationStation uses for its folder.
+	"apple2gs": 217,
+}
 
 func TestLegacySlugMap_SlugsStillResolve(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("testdata", "slugmap-platforms.json"))

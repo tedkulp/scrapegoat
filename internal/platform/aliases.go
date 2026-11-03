@@ -15,6 +15,9 @@ var aliases = []struct {
 	{"atari5200", 40},    // Atari 5200
 	{"gameandwatch", 52}, // Nintendo Game & Watch
 	{"n64dd", 122},       // Nintendo 64 DD
+	// Apple II (86) also lists Apple IIGS among its names and has the lower
+	// ID; without this alias Apple IIGS would have no slug at all.
+	{"apple2gs", 217}, // Apple IIGS
 	// MS-DOS (135) also lists PrBoom among its names and has the lower ID;
 	// without this alias the PrBoom platform would have no slug at all.
 	{"prboom", 290}, // PrBoom
