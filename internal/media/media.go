@@ -21,11 +21,6 @@ import (
 	"github.com/tedkulp/scrapegoat/internal/scraper"
 )
 
-// preferredRegions is the order media regions are tried in.
-var preferredRegions = []string{"us", "wor", "eu", "jp"}
-
-// typeMapping maps ScreenScraper media types to EmulationStation media type
-// directories, in the order plans list them.
 var typeMapping = []struct{ screenScraper, mediaType string }{
 	{"box-3D", "3dboxes"},
 	{"box-2D", "box2dfront"},
@@ -38,9 +33,19 @@ var typeMapping = []struct{ screenScraper, mediaType string }{
 	{"support-2D", "physicalmedia"},
 }
 
+// Types returns the EmulationStation media type folders media is placed in,
+// in plan order. Each call returns a new slice.
+func Types() []string {
+	types := make([]string, len(typeMapping))
+	for i, m := range typeMapping {
+		types[i] = m.mediaType
+	}
+	return types
+}
+
 // Placer plans and places media files for one platform and media root.
 type Placer struct {
-	cacheDir   string // <cache-dir>/cache/<platform>
+	cacheDir   string
 	mediaRoot  string
 	workers    int
 	httpClient *http.Client
@@ -102,6 +107,7 @@ const (
 	SourceDownload
 )
 
+// String names the source for logs.
 func (s Source) String() string {
 	switch s {
 	case SourceExisting:
@@ -116,16 +122,15 @@ func (s Source) String() string {
 
 // Item is one planned media file.
 type Item struct {
-	MediaType string // EmulationStation media type directory, e.g. "box2dfront"
+	MediaType string // EmulationStation media type folder, e.g. "box2dfront"
 	URL       string
-	Path      string // final path in the media root
+	Path      string // where the file goes in the media root
 	CachePath string
 	Source    Source
 
 	identity    identity
 	hasIdentity bool
-	// adopt is set for a cached file with no sidecar: Execute writes one.
-	adopt bool
+	adopt       bool
 }
 
 // Plan is a ROM's media plan.
@@ -151,7 +156,7 @@ func (p *Placer) Plan(game *scraper.Game, romFilename string, mode Mode) Plan {
 	romName := strings.TrimSuffix(romFilename, filepath.Ext(romFilename))
 	plan := Plan{dryRun: mode.DryRun}
 	for _, m := range typeMapping {
-		media := game.GetPreferredMedia(m.screenScraper, preferredRegions)
+		media := game.GetPreferredMedia(m.screenScraper, scraper.DefaultRegions())
 		if media == nil || media.URL == "" {
 			continue
 		}
@@ -179,8 +184,6 @@ func (p *Placer) Plan(game *scraper.Game, romFilename string, mode Mode) Plan {
 	return plan
 }
 
-// chooseSource sets the item's source to the media root or the media cache
-// when either already holds a usable copy.
 func (p *Placer) chooseSource(it *Item) {
 	if _, err := os.Stat(it.Path); err == nil {
 		it.Source = SourceExisting
@@ -204,15 +207,12 @@ func (p *Placer) chooseSource(it *Item) {
 	}
 }
 
-// identity is a media file's media identity, as stored in its sidecar.
 type identity struct {
 	SystemeID string `json:"systemeid"`
 	JeuID     string `json:"jeuid"`
 	Media     string `json:"media"`
 }
 
-// identityFromURL reads the media identity from a ScreenScraper media URL.
-// It reports false when the URL lacks jeuid or media.
 func identityFromURL(raw string) (identity, bool) {
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -316,7 +316,6 @@ func (p *Placer) Execute(plan Plan) Result {
 	return res
 }
 
-// place puts one cache or download item into the media root.
 func (p *Placer) place(it Item) error {
 	if it.Source == SourceDownload {
 		if err := p.fetch(it); err != nil {
@@ -341,8 +340,6 @@ func (p *Placer) place(it Item) error {
 	return nil
 }
 
-// fetch downloads an item from ScreenScraper into the media cache and records
-// its sidecar.
 func (p *Placer) fetch(it Item) error {
 	p.debugf("MEDIA: %s - DOWNLOADING (API call) %s", it.MediaType, redactURL(it.URL))
 	resp, err := p.httpClient.Get(it.URL)
@@ -371,8 +368,6 @@ func (p *Placer) fetch(it Item) error {
 	return nil
 }
 
-// writeAtomic writes r to a temp file next to path and renames it into place,
-// so a failed write leaves nothing at path.
 func writeAtomic(path string, r io.Reader) (err error) {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -400,7 +395,6 @@ func writeAtomic(path string, r io.Reader) (err error) {
 	return os.Rename(tmp.Name(), path)
 }
 
-// redactURL masks the passwords in a media URL for logging.
 func redactURL(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -416,8 +410,6 @@ func redactURL(raw string) string {
 	return u.String()
 }
 
-// redactErr keeps the media URL's passwords out of transport errors, which
-// quote the URL.
 func redactErr(err error) error {
 	var uerr *url.Error
 	if errors.As(err, &uerr) {

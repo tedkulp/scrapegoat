@@ -98,7 +98,7 @@ scrapegoat scrape --platform <platform> --rom-dir <path>
 | `-r, --rom-dir` | (required) | ROM directory |
 | `-o, --gamelist-dir` | rom-dir | Where `gamelist.xml` is written |
 | `-m, --media-root-dir` | rom-dir | Root directory for media subdirectories |
-| `--cache-dir` | `~/.scrapegoat` | Cache for game lookups and media |
+| `--cache-dir` | `~/.scrapegoat` | Cache for the platform catalog, game lookups and media |
 | `-w, --workers` | `4` | Concurrent media download workers |
 | `--cache-hours` | `12` | Hours before cached platforms and game lookups expire |
 | `--force-redownload` | off | Fetch every media file from ScreenScraper again, skipping both the media root and the media cache. Counts against the daily quota. |
@@ -201,6 +201,8 @@ Media files that already exist in the media root are kept, and files in the medi
 
 A media file that fails to download is reported and counted in the `Media:` line as failed; the ROM itself still counts as scraped.
 
+With artwork enabled, each artwork output writes `<media-root-dir>/<output_dir>/<rom-name>.<format>`; see [ARTWORK.md](ARTWORK.md).
+
 ## Caching
 
 All caches live under `--cache-dir` (default `~/.scrapegoat`):
@@ -210,6 +212,7 @@ All caches live under `--cache-dir` (default `~/.scrapegoat`):
 | Platform list | `platforms.json` | after `--cache-hours` (12) |
 | Game lookups, including "not found" | `games/` | after `--cache-hours` (12) |
 | Media files | `cache/<platform>/<media-type>/` | never |
+| Composed artwork | `artwork-cache/` | never; rebuilt when an output's settings or the media its layers use change |
 
 Cache hits make no API request and do not count against your quota. Each cached media file has a `.json` sidecar beside it recording which ScreenScraper media it is (system, game and media name, never credentials). When a lookup selects different media for a ROM, such as another region, the cached file is downloaded again. A cached file without a sidecar is trusted and given one. Delete the directory to start fresh: `rm -rf ~/.scrapegoat/`.
 

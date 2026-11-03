@@ -75,7 +75,7 @@ This will show:
 ```yaml
 artwork:
   enabled: true              # Enable/disable artwork generation
-  output_dir: "miximages"    # Directory for generated artwork (relative to media root)
+  output_dir: "miximages"    # Default folder for generated artwork, relative to the media root (default: "artwork")
   resources_dir: "~/.scrapegoat/resources"  # Directory for custom resources
 ```
 
@@ -85,15 +85,18 @@ Each output defines a single composite image type:
 
 ```yaml
 outputs:
-  - type: screenshot         # Identifier for this output (used in filename)
+  - type: screenshot         # Name for this output, shown in logs and errors
+    output_dir: "miximages"  # Optional: folder for this output (default: artwork.output_dir)
     width: 640              # Canvas width in pixels
     height: 480             # Canvas height in pixels
-    format: png             # Output format: png or jpg
+    format: png             # Output format: png (default) or jpg
     background: "transparent"  # Background color or "transparent"
 
     layers:
       # Layer definitions (see below)
 ```
+
+Every output writes one file per ROM to `{media-root-dir}/{dir}/{rom-name}.{format}`, where `{dir}` is the output's own `output_dir` or, without one, the top-level `artwork.output_dir`. The output's `type` is not part of the filename. To generate several outputs, give each its own `output_dir` (or a different format), for example `miximages` and `marquees`.
 
 ### Layer Definitions
 
@@ -115,7 +118,7 @@ layers:
 
 #### Available Resources
 
-Resources are media types downloaded from ScreenScraper:
+A layer `resource` is either one of these media types downloaded from ScreenScraper, or `custom:<path>` for an image in `resources_dir` (for example `custom:frames/tv.png`):
 
 - `screenshots` - In-game screenshots
 - `titlescreens` - Title screen images
@@ -326,24 +329,37 @@ artwork:
 
 The artwork system uses intelligent caching:
 
-- **Cache Key**: Generated from game name, output settings, media files, and modification times
+- **Cache Key**: Generated from the ROM name, the output definition (type, dimensions, background, layers), and the path and modification time of each media file the output's layers use. Media the layers do not use does not affect it, so the same inputs hit the cache on every run
 - **Cache Location**: `~/.scrapegoat/artwork-cache/` (organized into subdirectories)
-- **Cache Validation**: If any media file changes, cache is invalidated automatically
+- **Cache Validation**: If a media file a layer uses changes, the cache entry for that output is rebuilt automatically
 - **Performance**: Cached artwork is copied directly to output without regeneration
 
 ### Output Files
 
 Generated artwork files are saved to:
 ```
-{media-root-dir}/{output_dir}/{game-name}.{format}
+{media-root-dir}/{dir}/{rom-name}.{format}
 ```
+
+`{dir}` is the output's `output_dir`, or the top-level `artwork.output_dir` when the output has none. The path is the same whether the artwork was just composed or copied from the cache.
 
 Example:
 ```
 /roms/nes/miximages/Super Mario Bros.png
 ```
 
-The files are also included in `gamelist.xml` with proper relative paths for EmulationStation compatibility.
+`gamelist.xml` does not list artwork; EmulationStation finds it by folder and ROM name.
+
+Older versions wrote `{rom-name}-{type}.{format}` when the artwork came from the cache. Those files are not removed automatically; you can delete them from the artwork folder by hand.
+
+### Configuration Errors
+
+The artwork configuration is checked when `config.yaml` is loaded, before any scraping, even when artwork is disabled. Loading fails when:
+
+- **Two outputs write the same folder and format.** They would overwrite each other's files. The error names both outputs; give one of them its own `output_dir` or a different `format`.
+- **A layer uses an unknown resource.** The error names the output and the resource. Use one of the media types listed under [Available Resources](#available-resources) or `custom:<path>`.
+
+A failing output for one game (for example, its first layer's media is missing) does not stop the other outputs; each failure is logged as a warning for that game.
 
 ## Troubleshooting
 
@@ -391,8 +407,7 @@ The artwork system is optimized with caching. First run will be slow, subsequent
 ## Integration with EmulationStation
 
 Generated artwork is automatically:
-- Saved to the configured output directory
-- Added to `gamelist.xml` with proper relative paths
+- Saved to the output's `output_dir` (or `artwork.output_dir`) under the media root
 - Organized alongside other media files
 - Named to match ROM files (without extension)
 

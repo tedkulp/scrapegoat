@@ -41,8 +41,8 @@ func GetRegisteredEffects() []string {
 	return names
 }
 
-// getIntParam extracts an integer parameter with a default value
-func getIntParam(params map[string]interface{}, key string, defaultValue int) int {
+// IntParam extracts an integer parameter with a default value
+func IntParam(params map[string]interface{}, key string, defaultValue int) int {
 	if val, ok := params[key]; ok {
 		switch v := val.(type) {
 		case int:
@@ -54,8 +54,8 @@ func getIntParam(params map[string]interface{}, key string, defaultValue int) in
 	return defaultValue
 }
 
-// getFloat64Param extracts a float64 parameter with a default value
-func getFloat64Param(params map[string]interface{}, key string, defaultValue float64) float64 {
+// Float64Param extracts a float64 parameter with a default value
+func Float64Param(params map[string]interface{}, key string, defaultValue float64) float64 {
 	if val, ok := params[key]; ok {
 		switch v := val.(type) {
 		case float64:
@@ -67,8 +67,8 @@ func getFloat64Param(params map[string]interface{}, key string, defaultValue flo
 	return defaultValue
 }
 
-// getStringParam extracts a string parameter with a default value
-func getStringParam(params map[string]interface{}, key string, defaultValue string) string {
+// StringParam extracts a string parameter with a default value
+func StringParam(params map[string]interface{}, key string, defaultValue string) string {
 	if val, ok := params[key]; ok {
 		if s, ok := val.(string); ok {
 			return s

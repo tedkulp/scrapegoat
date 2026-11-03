@@ -89,7 +89,7 @@ func init() {
 	scrapeCmd.Flags().StringVarP(&romDir, "rom-dir", "r", "", "ROM directory path (required)")
 	scrapeCmd.Flags().StringVarP(&gamelistDir, "gamelist-dir", "o", "", "directory for gamelist.xml output (default: same as rom-dir)")
 	scrapeCmd.Flags().StringVarP(&mediaRootDir, "media-root-dir", "m", "", "root directory for media files (default: same as rom-dir)")
-	scrapeCmd.Flags().StringVar(&cacheDir, "cache-dir", "", "cache directory for downloaded media (default: ~/.scrapegoat)")
+	scrapeCmd.Flags().StringVar(&cacheDir, "cache-dir", "", "cache directory for the platform catalog, game lookups and media (default: output.cache_dir, then ~/.scrapegoat)")
 	scrapeCmd.Flags().IntVarP(&workers, "workers", "w", 4, "number of concurrent download workers")
 	scrapeCmd.Flags().BoolVar(&dryRun, "dry-run", false, "scan and query API but don't download or write files")
 	scrapeCmd.Flags().StringVar(&autoDelete, "auto-delete", "", "automatically delete failed ROMs: true=delete, false=keep, unset=prompt (default: prompt)")
@@ -148,7 +148,7 @@ func runListPlatforms(cmd *cobra.Command, args []string) {
 	}
 
 	platforms := make([]platformInfo, 0, len(systems))
-	preferredRegions := []string{"us", "wor", "eu", "jp"}
+	preferredRegions := scraper.DefaultRegions()
 
 	for _, system := range systems {
 		fullName := system.GetPreferredName(preferredRegions)
@@ -215,6 +215,10 @@ func runScraper(cmd *cobra.Command, args []string) {
 	// Set cache expiration time for both platforms and ROM metadata
 	cfg.SetCacheExpiration(cacheHours)
 
+	// Resolve the cache directory before the platform lookup, so
+	// platforms.json lives in the same directory as every other cache.
+	cacheDir = resolveCacheDir(cfg, cacheDir, platformName)
+
 	// Get platform configuration
 	platform, err := cfg.GetPlatform(platformName)
 	if err != nil {
@@ -225,7 +229,6 @@ func runScraper(cmd *cobra.Command, args []string) {
 	romDir = expandPathTemplate(romDir, platformName)
 	gamelistDir = expandPathTemplate(gamelistDir, platformName)
 	mediaRootDir = expandPathTemplate(mediaRootDir, platformName)
-	cacheDir = expandPathTemplate(cacheDir, platformName)
 
 	// Set default directories to rom-dir if not specified
 	if gamelistDir == "" {
@@ -234,11 +237,6 @@ func runScraper(cmd *cobra.Command, args []string) {
 
 	if mediaRootDir == "" {
 		mediaRootDir = romDir
-	}
-
-	// Use cache directory from config if not specified via flag
-	if cacheDir == "" {
-		cacheDir = cfg.Output.CacheDir
 	}
 
 	// Override artwork config with command-line flag if provided
@@ -284,7 +282,6 @@ func runScraper(cmd *cobra.Command, args []string) {
 		scraper.WithDebug(verbose),
 	)
 
-	// Step 3: Initialize media placement
 	mediaOpts := []media.Option{}
 	if verbose {
 		mediaOpts = append(mediaOpts, media.WithDebugOutput(os.Stderr))
@@ -346,7 +343,7 @@ func runScraper(cmd *cobra.Command, args []string) {
 		}
 
 		game := result.Game
-		gameName := game.GetPreferredName([]string{"us", "wor", "eu", "jp"})
+		gameName := game.GetPreferredName(scraper.DefaultRegions())
 		if result.Cached {
 			logInfo("  Found: %s (cached)", gameName)
 		} else {
@@ -369,48 +366,31 @@ func runScraper(cmd *cobra.Command, args []string) {
 			continue
 		}
 
-		// Get ROM name without extension for artwork
 		romName := strings.TrimSuffix(rom.Filename, filepath.Ext(rom.Filename))
 
 		logVerbose("  Placing %d media files (%d already exist)...", len(mediaPlan.Items), mediaPlan.Count(media.SourceExisting))
 		mediaResult := placer.Execute(mediaPlan)
-		for mediaType, err := range mediaResult.Failures {
-			logError("    Failed to place %s: %v", mediaType, err)
+		for _, mediaType := range media.Types() {
+			if err, ok := mediaResult.Failures[mediaType]; ok {
+				logError("    Failed to place %s: %v", mediaType, err)
+			}
 		}
 		if summary := mediaSummary(mediaResult); summary != "" {
 			logInfo("  Media: %s", summary)
 		}
 
-		downloadedFiles := make(map[string]string, len(mediaResult.Placed))
-		for mediaType, path := range mediaResult.Placed {
-			downloadedFiles[mediaType] = path
-		}
-
 		// Generate artwork if enabled
-		if compositor != nil && len(downloadedFiles) > 0 {
+		if compositor != nil && len(mediaResult.Placed) > 0 {
 			logVerbose("  Generating artwork...")
-			artworkDir := filepath.Join(mediaRootDir, cfg.Artwork.OutputDir)
-
-			// Convert downloadedFiles to artwork.MediaFiles format (just type name without directory)
-			artworkMediaFiles := make(artwork.MediaFiles)
-			for mediaType, fullPath := range downloadedFiles {
-				artworkMediaFiles[mediaType] = fullPath
+			artworkResult := compositor.GenerateArtwork(romName, artwork.MediaFiles(mediaResult.Placed), mediaRootDir)
+			for _, err := range artworkResult.Errors {
+				logInfo("  Warning: %v", err)
 			}
-
-			artworkFiles, err := compositor.GenerateArtwork(romName, artworkMediaFiles, artworkDir)
-			if err != nil {
-				logVerbose("  Warning: Failed to generate artwork: %v", err)
-			} else {
-				logVerbose("  Generated %d artwork files", len(artworkFiles))
-				// Add artwork files to downloadedFiles so they're included in gamelist.xml
-				for artType, artPath := range artworkFiles {
-					downloadedFiles[artType] = artPath
-				}
-			}
+			logVerbose("  Generated %d artwork files", len(artworkResult.Paths))
 		}
 
 		// Add game to metadata
-		if err := gen.AddGameFromScraper(rom.Path, game, downloadedFiles); err != nil {
+		if err := gen.AddGameFromScraper(rom.Path, game); err != nil {
 			logError("  Failed to add game metadata: %v", err)
 			errorCount++
 			failedROMs = append(failedROMs, rom)
@@ -559,6 +539,19 @@ func logVerbose(format string, args ...interface{}) {
 
 func logError(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
+}
+
+// resolveCacheDir returns the effective cache directory: the --cache-dir
+// flag with {platform} expanded if given, otherwise output.cache_dir from
+// the config. It stores the result in cfg.Output.CacheDir so the platform
+// cache (platforms.json) uses it too.
+func resolveCacheDir(cfg *config.Config, flagValue, platformName string) string {
+	dir := expandPathTemplate(flagValue, platformName)
+	if dir == "" {
+		dir = cfg.Output.CacheDir
+	}
+	cfg.Output.CacheDir = dir
+	return dir
 }
 
 // expandPathTemplate replaces template variables in a path string

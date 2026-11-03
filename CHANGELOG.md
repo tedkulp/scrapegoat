@@ -30,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `--verbose` cache summary shows the actual `--cache-hours` value instead of always saying 12 hours.
 - A cached media file is downloaded again when a lookup now selects a different region or game for it. Each cached file gets a small `.json` sidecar recording which media it is; existing cached files without one are kept and adopted.
 - An interrupted media download no longer leaves a partial file that later runs serve from the cache. An empty cached file is downloaded again.
+- Artwork is always written to `<media-root>/<dir>/<rom-name>.<format>`, whether it was just composed or came from the artwork cache. `<dir>` is the output's new optional `output_dir`, or `artwork.output_dir`. Older runs may have left `<rom-name>-<type>.<format>` files in the artwork folder; they are not removed and can be deleted by hand.
+- The artwork cache key no longer changes between runs, so unchanged artwork is copied from the cache instead of being composed again. Existing artwork cache entries are rebuilt once.
+- Two artwork outputs writing the same format to the same folder, and layer resources that are not a media type or `custom:<path>`, are rejected when `config.yaml` loads instead of silently overwriting each other or producing no artwork. `config.yaml.example` now uses real media type names.
+- A failing artwork output no longer discards the other outputs for that ROM.
 
 ### Security
 

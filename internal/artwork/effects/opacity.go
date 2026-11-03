@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+
+	"github.com/tedkulp/scrapegoat/internal/artwork"
 )
 
 // OpacityEffect adjusts image opacity
@@ -19,7 +21,7 @@ func (e *OpacityEffect) Validate(params map[string]interface{}) error {
 	if _, ok := params["value"]; !ok {
 		return fmt.Errorf("opacity effect requires 'value' parameter (0-100)")
 	}
-	value := getIntParam(params, "value", 100)
+	value := artwork.IntParam(params, "value", 100)
 	if value < 0 || value > 100 {
 		return fmt.Errorf("opacity value must be between 0 and 100")
 	}
@@ -28,7 +30,7 @@ func (e *OpacityEffect) Validate(params map[string]interface{}) error {
 
 // Apply adjusts the opacity of an image
 func (e *OpacityEffect) Apply(img image.Image, params map[string]interface{}) (image.Image, error) {
-	value := getIntParam(params, "value", 100)
+	value := artwork.IntParam(params, "value", 100)
 	if value == 100 {
 		return img, nil
 	}

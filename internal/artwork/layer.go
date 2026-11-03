@@ -66,8 +66,8 @@ func loadLayerImage(resource string, mediaFiles MediaFiles, resourcesDir string)
 	var filePath string
 
 	// Check if it's a custom resource
-	if strings.HasPrefix(resource, "custom:") {
-		customPath := strings.TrimPrefix(resource, "custom:")
+	if strings.HasPrefix(resource, CustomResourcePrefix) {
+		customPath := strings.TrimPrefix(resource, CustomResourcePrefix)
 		filePath = resourcesDir + "/" + customPath
 	} else {
 		// Look up media file path

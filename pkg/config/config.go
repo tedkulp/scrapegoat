@@ -115,6 +115,9 @@ func Load(configPath string) (*Config, error) {
 	if config.ScreenScraper.UserPassword == "" {
 		return nil, fmt.Errorf("screenscraper.user_password is required")
 	}
+	if err := config.Artwork.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid artwork configuration: %w", err)
+	}
 
 	return &config, nil
 }
@@ -207,7 +210,7 @@ func (c *Config) loadPlatformsFromAPI() error {
 
 	// Convert systems to platforms map
 	platforms := make(map[string]Platform)
-	preferredRegions := []string{"us", "wor", "eu", "jp"}
+	preferredRegions := scraper.DefaultRegions()
 
 	for _, system := range systems {
 		name := system.GetPreferredName(preferredRegions)

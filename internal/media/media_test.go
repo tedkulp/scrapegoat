@@ -91,6 +91,13 @@ func TestPlan_MapsEveryScreenScraperType(t *testing.T) {
 	}
 }
 
+func TestTypes_ListsEmulationStationFoldersInPlanOrder(t *testing.T) {
+	want := []string{"3dboxes", "box2dfront", "backcovers", "manuals", "screenshots", "titlescreens", "wheel", "videos", "physicalmedia"}
+	if got := Types(); !reflect.DeepEqual(got, want) {
+		t.Errorf("Types() = %v, want %v", got, want)
+	}
+}
+
 // fixture is an httptest ScreenScraper media server plus temp media root and
 // cache dirs.
 type fixture struct {

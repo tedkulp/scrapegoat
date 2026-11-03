@@ -5,6 +5,8 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
+
+	"github.com/tedkulp/scrapegoat/internal/artwork"
 )
 
 // RoundedEffect implements rounded corners
@@ -29,7 +31,7 @@ func (e *RoundedEffect) Validate(params map[string]interface{}) error {
 
 // Apply applies rounded corners to an image
 func (e *RoundedEffect) Apply(img image.Image, params map[string]interface{}) (image.Image, error) {
-	radius := getIntParam(params, "radius", 10)
+	radius := artwork.IntParam(params, "radius", 10)
 	if radius <= 0 {
 		return img, nil
 	}
@@ -103,16 +105,4 @@ func (e *RoundedEffect) Apply(img image.Image, params map[string]interface{}) (i
 	draw.DrawMask(dst, bounds, img, image.Point{}, mask, image.Point{}, draw.Over)
 
 	return dst, nil
-}
-
-func getIntParam(params map[string]interface{}, key string, defaultValue int) int {
-	if val, ok := params[key]; ok {
-		switch v := val.(type) {
-		case int:
-			return v
-		case float64:
-			return int(v)
-		}
-	}
-	return defaultValue
 }
