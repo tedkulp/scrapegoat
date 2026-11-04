@@ -207,7 +207,7 @@ A media file that fails to download is reported and counted in the `Media:` line
 
 `gamelist.xml` is rewritten with this run's entries. After a cutoff, deferred ROMs keep their entries from the existing file.
 
-The run ends with a summary: `Scraped`, `New media` (scraped ROMs that got at least one media file downloaded or copied from the media cache into the media root this run; in a dry run, that would get one; artwork is not counted), `Not found`, `Non-game` and `Failed`.
+The run ends with a summary: `Scraped`, `New media` (scraped ROMs that got at least one media file downloaded or copied from the media cache into the media root this run; in a dry run, that would get one; with `--force-redownload` every re-placed file counts; artwork is not counted), `Not found`, `Non-game` and `Failed`, plus `Deferred` after a cutoff.
 
 `scrape` exits 0 when it finishes, and 1 after a cutoff (once the gamelist is written).
 

@@ -18,6 +18,10 @@ _Avoid_: Status, result type
 A scrape outcome where the ROM matched a game and its media and artwork were placed (or, in a dry run, planned).
 _Avoid_: Success, done
 
+**New media**:
+The run summary's count of scraped ROMs that got at least one media file newly placed in the media root: downloaded or copied from the media cache (in a dry run, planned that way). Files already in the media root, failed files and artwork do not count. With `--force-redownload` every re-placed file counts.
+_Avoid_: Downloaded ROMs (cache copies count too)
+
 **Unmatched ROM**:
 A ROM whose scrape ended as not found, non-game or a failure other than a cutoff. Unmatched ROMs are what Scrapegoat offers to delete at the end of a run.
 _Avoid_: Failed ROM (not found and non-game ROMs did not fail), bad ROM
