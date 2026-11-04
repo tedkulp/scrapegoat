@@ -166,7 +166,7 @@ func TestRomLoop_RunWithoutCutoffKeepsExitZeroAndSummary(t *testing.T) {
 	if len(tally.unmatched) != 1 || tally.failed != 1 {
 		t.Errorf("failed ROM not unmatched: %+v", tally)
 	}
-	if got := tally.summaryLines(); len(got) != 4 {
-		t.Errorf("summary without cutoff = %v, want the four counts", got)
+	if got := tally.summaryLines(); len(got) != 5 {
+		t.Errorf("summary without cutoff = %v, want the five counts", got)
 	}
 }

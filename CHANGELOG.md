@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The `scrape` run summary adds `New media: N` after `Scraped`: the number of scraped ROMs that got at least one media file downloaded or copied from the media cache into the media root (in a dry run, that would get one). Artwork is not counted.
+
 ## [1.1.0] - 2026-11-03
 
 ### Added
